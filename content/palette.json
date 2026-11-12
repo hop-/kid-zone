@@ -1,0 +1,21 @@
+{
+  "colors": {
+    "0": {"name": "black",      "rgb": "#1d1a2f"},
+    "1": {"name": "dark_grey",  "rgb": "#5a5a78"},
+    "2": {"name": "silver",     "rgb": "#b4b9cc"},
+    "3": {"name": "white",      "rgb": "#fbf7ee"},
+    "4": {"name": "red",        "rgb": "#e5404f"},
+    "5": {"name": "orange",     "rgb": "#f58c2d"},
+    "6": {"name": "yellow",     "rgb": "#ffd447"},
+    "7": {"name": "green",      "rgb": "#62c556"},
+    "8": {"name": "dark_green", "rgb": "#2c7a4b"},
+    "9": {"name": "sky",        "rgb": "#6fcbf2"},
+    "a": {"name": "blue",       "rgb": "#3b6ee3"},
+    "b": {"name": "navy",       "rgb": "#28336e"},
+    "c": {"name": "purple",     "rgb": "#9a5ad8"},
+    "d": {"name": "pink",       "rgb": "#ff92c2"},
+    "e": {"name": "brown",      "rgb": "#8c5636"},
+    "f": {"name": "tan",        "rgb": "#efbb84"}
+  },
+  "transparent": "."
+}

@@ -1,0 +1,10 @@
+{
+  "sample_rate": 22050,
+  "sounds": {
+    "tap":     {"wave": "square",   "notes": [[880, 0.04]], "volume": 0.3, "attack": 0.002, "release": 0.025},
+    "back":    {"wave": "square",   "sweep": [660, 330], "duration": 0.08, "volume": 0.3, "attack": 0.002, "release": 0.03},
+    "correct": {"wave": "square",   "notes": [[523, 0.07], [659, 0.07], [784, 0.14]], "volume": 0.35, "attack": 0.003, "release": 0.05},
+    "wrong":   {"wave": "triangle", "sweep": [262, 196], "duration": 0.2, "volume": 0.45, "attack": 0.01, "release": 0.08},
+    "fanfare": {"wave": "square",   "notes": [[523, 0.1], [659, 0.1], [784, 0.1], [1047, 0.32]], "volume": 0.35, "attack": 0.003, "release": 0.12}
+  }
+}

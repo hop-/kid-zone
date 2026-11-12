@@ -1,0 +1,16 @@
+{
+  "objects": [
+    {"id": "apple",      "category": "fruit",     "sprite": "apple"},
+    {"id": "banana",     "category": "fruit",     "sprite": "banana"},
+    {"id": "cherry",     "category": "fruit",     "sprite": "cherry"},
+    {"id": "strawberry", "category": "fruit",     "sprite": "strawberry"},
+    {"id": "carrot",     "category": "vegetable", "sprite": "carrot"},
+    {"id": "tomato",     "category": "vegetable", "sprite": "tomato"},
+    {"id": "corn",       "category": "vegetable", "sprite": "corn"},
+    {"id": "pepper",     "category": "vegetable", "sprite": "pepper"},
+    {"id": "ball",       "category": "toy",       "sprite": "ball"},
+    {"id": "teddy",      "category": "toy",       "sprite": "teddy"},
+    {"id": "duck",       "category": "toy",       "sprite": "duck"},
+    {"id": "block",      "category": "toy",       "sprite": "block"}
+  ]
+}

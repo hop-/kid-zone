@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "modes": [
+    {
+      "id": "math", "title_key": "MODE_MATH", "icon": "icon_math", "color": "red",
+      "games": [
+        {
+          "id": "math_addition", "title_key": "GAME_MATH_ADDITION", "icon": "icon_addition",
+          "scene": "res://games/math_addition/math_addition.tscn",
+          "round_length": 10,
+          "params": {},
+          "levels": [
+            {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "params": {"max_sum": 5}},
+            {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "params": {"max_sum": 10}},
+            {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "params": {"max_addend": 12}}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "words", "title_key": "MODE_WORDS", "icon": "icon_words", "color": "blue",
+      "games": [
+        {
+          "id": "word_missing_letter", "title_key": "GAME_MISSING_LETTER", "icon": "icon_missing_letter",
+          "scene": "res://games/word_missing_letter/word_missing_letter.tscn",
+          "round_length": 10,
+          "params": {"choices": 4}
+        }
+      ]
+    }
+  ]
+}
