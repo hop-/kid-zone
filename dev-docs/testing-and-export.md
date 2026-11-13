@@ -75,9 +75,10 @@ func test_sound_toggle_mutes_the_sfx_bus() -> void:
   `Settings.load_from(Settings.DEFAULT_PATH)` (which only reads), and delete the
   temp file. A fresh `preload("res://autoload/settings.gd").new()` has no path and
   never saves.
-- **Pure logic** (`RoundController`, `AdditionGenerator`, `MissingLetterGenerator`)
-  takes a seeded `RandomNumberGenerator`, so tests can run 1000 questions and
-  compare two runs with the same seed.
+- **Pure logic** (`RoundController`, `AdditionGenerator`, `SubtractionGenerator`,
+  `MissingLetterGenerator`, `QuestionUtils`) takes a seeded
+  `RandomNumberGenerator`, so tests can run 1000 questions and compare two runs
+  with the same seed.
 - **Fixtures:** `Content`, `Art` and `Audio` can be separate instances:
   `preload("res://autoload/content.gd").new()` then `load_content(<root>)` for a
   fixture content folder; `Art`'s `override_root` and `content`; `Audio`'s
@@ -92,7 +93,9 @@ func test_sound_toggle_mutes_the_sfx_bus() -> void:
   and `Router.scenes = Router.DEFAULT_SCENES.duplicate()`. Menu screens and round end
   have `tiles()`; press one with `tile.pressed.emit()`. `GameShell` takes a `seed`
   param and has `game()`, `controller()`, `star_bar()`, `current_question()` and
-  `is_input_locked()`; both games have `choice_buttons()`.
+  `is_input_locked()`. Every game shows its answers in a `ChoiceRow`, the game's
+  unique `%Choices` node (`shell.game().get_node("%Choices")`); its `buttons()`
+  lists them.
 - **Sound in tests:** stop any player you started and wait about 0.15 s before the
   test ends. Otherwise Godot may print "ObjectDB instances were leaked" at exit
   (the tests still pass).
@@ -183,7 +186,19 @@ SHOT=/tmp/shots/mode_4x3.png godot --path . --resolution 1024x768 \
 ```
 
 At 1024×768 that saves a 320×240 image. Check the main menu, both mode menus, level
-select, both games and round end at 1280×720, 1024×768 and 1280×800.
+select, every game and round end at 1280×720, 1024×768 and 1280×800.
+
+- Debug options never save settings, but the game still reads
+  `user://settings.cfg`. To shoot the word game in lowercase without touching your
+  real settings, point `XDG_DATA_HOME` at a scratch folder holding
+  `godot/app_userdata/Kid Zone/settings.cfg` with `letter_case="lower"` under
+  `[settings]`.
+- In a `--script` probe, class names (`SubtractionGenerator`, `QuestionUtils`)
+  work, but autoload names (`Content`, `Settings`) don't compile. Reach an autoload
+  with `root.get_node(^"Content")` instead.
+- To click a control from a windowed probe, push an `InputEventMouseButton` at
+  `root.get_final_transform() * control.get_global_rect().get_center()`;
+  `get_screen_transform()` leaves out the integer stretch.
 
 ## Exports
 
@@ -204,7 +219,7 @@ select, both games and round end at 1280×720, 1024×768 and 1280×800.
 
 | Target | Output in `build/<BUILD>/` |
 |--------|---------------------------|
-| `make linux` | `linux/kid-zone` |
+| `make linux` | `linux/kid-zone` (debug also writes `kid-zone.sh`, a launcher) |
 | `make windows` | `windows/kid-zone.exe` (debug also writes `kid-zone.console.exe`) |
 | `make macos` | `macos/kid-zone.zip` |
 | `make android` | `android/kid-zone.apk` |

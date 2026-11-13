@@ -173,13 +173,30 @@ func _feedback(method: Callable) -> void:
 		await _game.feedback_done
 
 
-func _finish_round() -> void:
+## Opens round end in the shell's place. When the Router refuses because another
+## transition is running, it tries once more after that transition, unless the shell
+## has left the screen by then (a back tap, say). A final refusal is an error and the
+## shell unlocks, so it is never left locked.
+func _finish_round(retry: bool = true) -> void:
 	_set_locked(true)
 	var stars: Array[int] = []
 	for star in _controller.stars():
 		stars.append(int(star))
-	Router.go_to(ROUND_END_SCREEN,
-			{"game_id": _game_id, "level_id": _level_id, "stars": stars}, true)
+	var params := {"game_id": _game_id, "level_id": _level_id, "stars": stars}
+	if Router.go_to(ROUND_END_SCREEN, params, true):
+		return
+	if retry and Router.is_transitioning():
+		# A connection to a freed shell is dropped, so this never runs on a dead one.
+		Router.transition_finished.connect(_retry_finish_round, CONNECT_ONE_SHOT)
+		return
+	push_error("GameShell: the Router refused to open %s for '%s'" % [ROUND_END_SCREEN, _game_id])
+	_set_locked(false)
+
+
+func _retry_finish_round() -> void:
+	# A shell the transition replaced has left the tree; it has nothing more to do.
+	if is_inside_tree():
+		_finish_round(false)
 
 
 func _set_locked(locked: bool) -> void:

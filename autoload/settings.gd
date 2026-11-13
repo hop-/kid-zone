@@ -1,12 +1,15 @@
 extends Node
 ## The player's settings, saved in a `ConfigFile` (`user://settings.cfg` by default):
-## `sfx_on`, `music_on`, `sfx_volume_db`, `music_volume_db` and `locale`.
+## `sfx_on`, `music_on`, `sfx_volume_db`, `music_volume_db`, `locale` and
+## `letter_case`.
 ##
 ## - Setting a property applies it, saves the file and emits `changed`, so a sound
 ##   toggle is just `Settings.sfx_on = not Settings.sfx_on`.
 ## - The mute flags and volumes drive the `SFX` and `Music` buses
 ##   (`default_bus_layout.tres`). They are applied on load and on every change.
 ## - `locale` picks the word pack (`Content` reads it on load) and falls back to `en`.
+## - `letter_case` (`upper` or `lower`) is how the word game shows its words and
+##   letters; `display_text()` applies it. The content itself stays lowercase.
 ##
 ## Registered as the `Settings` autoload, first, so `Content` sees the locale. It loads
 ## `DEFAULT_PATH` on startup and only writes it when a setting changes. Tests must not
@@ -23,6 +26,8 @@ const SECTION := "settings"
 const SFX_BUS := &"SFX"
 const MUSIC_BUS := &"Music"
 const DEFAULT_LOCALE := "en"
+const LETTER_CASE_UPPER := "upper"
+const LETTER_CASE_LOWER := "lower"
 ## Volumes are clamped to this range, in dB.
 const MIN_VOLUME_DB := -80.0
 const MAX_VOLUME_DB := 6.0
@@ -32,6 +37,7 @@ const DEFAULTS := {
 	"sfx_volume_db": 0.0,
 	"music_volume_db": 0.0,
 	"locale": DEFAULT_LOCALE,
+	"letter_case": LETTER_CASE_UPPER,
 }
 
 ## The file this instance loads and saves; empty means "don't save".
@@ -63,6 +69,12 @@ var locale: String:
 		return _values["locale"]
 	set(value):
 		_update("locale", value if not value.is_empty() else DEFAULT_LOCALE)
+## `LETTER_CASE_UPPER` or `LETTER_CASE_LOWER`; anything else is stored as upper.
+var letter_case: String:
+	get:
+		return _values["letter_case"]
+	set(value):
+		_update("letter_case", _sanitized("letter_case", value))
 
 ## The current values, keyed like `DEFAULTS`; the properties above read and write it.
 var _values: Dictionary = DEFAULTS.duplicate()
@@ -117,6 +129,12 @@ func values() -> Dictionary:
 	return _values.duplicate()
 
 
+## `text` as the word game shows it: in uppercase when `letter_case` is upper, else
+## unchanged (content is lowercase).
+func display_text(text: String) -> String:
+	return text.to_upper() if _values["letter_case"] == LETTER_CASE_UPPER else text
+
+
 func _update(key: String, value: Variant) -> void:
 	if _values[key] == value:
 		return
@@ -135,9 +153,13 @@ func _apply_bus(bus_name: StringName, on: bool, volume_db: float) -> void:
 	AudioServer.set_bus_volume_db(index, volume_db)
 
 
-## `value` if it has the right type for `key`, else the default. Volumes are clamped.
+## `value` if it has the right type for `key`, else the default. Volumes are clamped,
+## and `letter_case` must be upper or lower.
 static func _sanitized(key: String, value: Variant) -> Variant:
 	var fallback: Variant = DEFAULTS[key]
+	if key == "letter_case":
+		return value if value is String and value in [LETTER_CASE_UPPER, LETTER_CASE_LOWER] \
+				else fallback
 	match typeof(fallback):
 		TYPE_BOOL:
 			return value if value is bool else fallback

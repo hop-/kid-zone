@@ -22,11 +22,6 @@ func _has_point(point: Vector2) -> bool:
 	return Rect2(Vector2.ZERO, size).grow(touch_margin).has_point(point)
 
 
-## The touch target's size: the drawn size plus `touch_margin` on every side.
-func touch_size() -> Vector2:
-	return size + Vector2.ONE * (2 * touch_margin)
-
-
 func _on_button_down() -> void:
 	if not press_sfx.is_empty():
 		Audio.play_sfx(press_sfx)

@@ -9,11 +9,13 @@ extends RefCounted
 ## Params (from the catalog level, numbers may be JSON floats):
 ## - `max_sum`: a + b <= max_sum
 ## - `max_addend`: a <= max_addend and b <= max_addend
-## At least one is required; both apply when both are given. Addends are always >= 1.
+## - `min_sum` (optional): a + b >= min_sum, so a hard level never asks easy sums
+## At least one of `max_sum` and `max_addend` is required; every given bound applies.
+## Addends are always >= 1.
 
 const CHOICE_COUNT := 4
-## Distractors start at answer ± 1..NEAR_RANGE, and widen outward only when needed.
-const NEAR_RANGE := 3
+## The smallest choice offered (addends are >= 1, so every sum is >= 2).
+const MIN_CHOICE := 1
 
 var _rng: RandomNumberGenerator
 var _object_ids: PackedStringArray
@@ -34,10 +36,11 @@ func _init(params: Dictionary, object_ids: PackedStringArray, rng: RandomNumberG
 		return
 	var max_sum := int(params["max_sum"]) if has_sum else 0
 	var max_addend := int(params["max_addend"]) if has_addend else 0
+	var min_sum := int(params.get("min_sum", 0))
 	var top := max_addend if has_addend else max_sum - 1
 	for a in range(1, top + 1):
 		for b in range(1, top + 1):
-			if has_sum and a + b > max_sum:
+			if (has_sum and a + b > max_sum) or a + b < min_sum:
 				continue
 			_pairs.append(Vector2i(a, b))
 	if _pairs.is_empty():
@@ -62,7 +65,8 @@ func generate() -> Dictionary:
 		"a": pair.x,
 		"b": pair.y,
 		"answer": answer,
-		"choices": _build_choices(answer),
+		"choices": QuestionUtils.number_choices(answer, CHOICE_COUNT, MIN_CHOICE,
+				QuestionUtils.NO_MAX, _rng),
 		"object_id": object_id,
 		"key": "%d+%d" % [pair.x, pair.y],
 	}
@@ -77,30 +81,3 @@ func _pick_pair_index() -> int:
 	if index >= _last_pair_index:
 		index += 1
 	return index
-
-
-func _build_choices(answer: int) -> Array[int]:
-	var needed := CHOICE_COUNT - 1
-	var candidates: Array[int] = []
-	var distance := 1
-	# answer ± 1..3 first; past that, widen one step at a time. Values below 1 are
-	# skipped, and the upward side always grows, so this ends.
-	while distance <= NEAR_RANGE or candidates.size() < needed:
-		if answer - distance >= 1:
-			candidates.append(answer - distance)
-		candidates.append(answer + distance)
-		distance += 1
-	_shuffle(candidates)
-	var choices: Array[int] = [answer]
-	choices.append_array(candidates.slice(0, needed))
-	_shuffle(choices)
-	return choices
-
-
-## Fisher–Yates with the injected RNG (Array.shuffle() uses the global one).
-func _shuffle(values: Array) -> void:
-	for i in range(values.size() - 1, 0, -1):
-		var j := _rng.randi_range(0, i)
-		var tmp: Variant = values[i]
-		values[i] = values[j]
-		values[j] = tmp

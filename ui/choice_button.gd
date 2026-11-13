@@ -2,18 +2,17 @@ class_name ChoiceButton
 extends KidButton
 ## A big answer button (a number or a letter) for the games.
 ##
-## States: `IDLE` (tappable), `PRESSED` (held down), `WRONG` (it shakes, turns grey
-## and stays disabled until `reset()`), and `CORRECT` (green, a short hop, disabled).
+## It is idle (tappable) until `show_wrong()` (it shakes, turns grey and stays disabled
+## until `reset()`) or `show_correct()` (green, a short hop, disabled).
 ## It plays `tap` on press and emits `chosen(value)` on release. `show_wrong()` and
 ## `show_correct()` can be awaited: they return when the animation ends. The wrong
 ## and correct sounds belong to the game shell.
 
 ## Emitted on release with this button's `value`.
 signal chosen(value: Variant)
-## Emitted when a wrong or correct animation ends, or is cut short by another state.
+## Emitted when a wrong or correct animation ends, or is cut short by another one or
+## `reset()`.
 signal animation_done
-
-enum State { IDLE, PRESSED, WRONG, CORRECT }
 
 const DEFAULT_SIZE := Vector2(40, 36)
 ## Horizontal shake offsets, one per step.
@@ -29,7 +28,6 @@ var value: Variant = null:
 		value = new_value
 		text = "" if new_value == null else str(new_value)
 
-var _state := State.IDLE
 var _tween: Tween = null
 var _rest_position := Vector2.ZERO
 
@@ -42,17 +40,9 @@ func _init() -> void:
 	pressed.connect(_on_pressed)
 
 
-## The current state; `PRESSED` while an idle button is held down.
-func get_state() -> State:
-	if _state == State.IDLE and get_draw_mode() in [DRAW_PRESSED, DRAW_HOVER_PRESSED]:
-		return State.PRESSED
-	return _state
-
-
 ## Back to idle: enabled, default colors, at rest.
 func reset() -> void:
 	_stop_animation()
-	_state = State.IDLE
 	disabled = false
 	_set_correct_style(false)
 
@@ -60,7 +50,6 @@ func reset() -> void:
 ## Shakes, turns grey and disables the button. Await it to wait for the shake.
 func show_wrong() -> void:
 	_stop_animation()
-	_state = State.WRONG
 	disabled = true
 	_set_correct_style(false)
 	_rest_position = position
@@ -75,7 +64,6 @@ func show_wrong() -> void:
 ## the hop.
 func show_correct() -> void:
 	_stop_animation()
-	_state = State.CORRECT
 	disabled = true
 	_set_correct_style(true)
 	_rest_position = position

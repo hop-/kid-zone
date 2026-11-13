@@ -3,18 +3,25 @@
 ## Purpose and scope
 
 A small, extendable educational game for young kids, played mostly by touch on
-tablets and also with a mouse on desktops. v1 ships:
+tablets and also with a mouse on desktops. It has:
 
-- **Math** mode with `math_addition`: `a + b = ?` with countable objects, levels
-  easy (`max_sum` 5), medium (`max_sum` 10) and hard (`max_addend` 12)
-- **Words** mode with `word_missing_letter`: a picture and its three-letter English
-  word with one blank, four letter choices
-- generated sound effects with a remembered sound toggle, a music-ready audio layer
-  (no tracks yet), and English-only but localization-ready content
+- **Math** mode with two games on one shared equation layout
+  (`MathEquationGame`), each with countable objects above its numbers:
+  - `math_addition`, "add": `a + b = ?`, levels easy (`max_sum` 5), medium
+    (`max_sum` 10) and hard (`max_addend` 12, `min_sum` 11)
+  - `math_subtraction`, "minus": `a - b = ?` with a objects above `a` and b above
+    `b`, b ≥ 1 and an answer ≥ 0; levels easy (`max_minuend` 5), medium
+    (`max_minuend` 10) and hard (`min_minuend` 8, `max_minuend` 12)
+- **Words** mode with `word_missing_letter`: a picture and its 3- or 4-letter
+  English word with one blank and four letter choices. The 40 words are mixed at
+  random, and are shown in UPPERCASE (default) or lowercase.
+- generated sound effects with a remembered sound toggle, a remembered `ABC`/`abc`
+  letter-case toggle, a music-ready audio layer (no tracks yet), and English-only
+  but localization-ready content
 
-Not in v1: music tracks, other languages or a language picker, voice-over,
+The game has no music tracks, other languages or language picker, voice-over,
 profiles or saved progress (only settings are saved), Web export, iOS `.ipa`
-builds, and network access of any kind.
+builds, or network access of any kind.
 
 ## Architecture
 
@@ -27,8 +34,10 @@ main.tscn (Main: ScreenHost + Fade)  ──attach──►  Router (autoload)
                                             ├─ RoundController (pure logic)
                                             └─ StarBar, BackButton, input blocker
 
-math_addition ─► AdditionGenerator          (pure logic, injected RNG)
-word_missing_letter ─► MissingLetterGenerator
+math_addition    ─┐ extend MathEquationGame ─► AdditionGenerator     (pure logic,
+math_subtraction ─┘ (games/math_common)      ─► SubtractionGenerator   injected RNG)
+word_missing_letter ─────────────────────────► MissingLetterGenerator
+every game: answer buttons in a ChoiceRow; generators share QuestionUtils
 
 Autoloads: Settings → Content → Art → Audio → Router
 ```
@@ -42,6 +51,12 @@ Autoloads: Settings → Content → Art → Audio → Router
   only present questions and report taps.
 - **GameShell owns the round.** Every game gets the top bar (back button and star
   bar), sounds, input locking, stars and round end for free.
+- **Shared game parts.** `ChoiceRow` (`ui/choice_row.gd`) is every game's row of
+  answer buttons. `QuestionUtils` (`core/question_utils.gd`) holds the static
+  shuffle, number-choice and letter-distractor rules that the generators and
+  `Content` validation use. `MathEquationGame` (`games/math_common/`) is the view of
+  both math games; each one only supplies its generator and operator sign. See
+  [adding-a-game.md](adding-a-game.md).
 
 ## Autoloads and their order
 
@@ -50,7 +65,7 @@ the ones before it.
 
 | # | Name | File | Role |
 |---|------|------|------|
-| 1 | `Settings` | `autoload/settings.gd` | Loads `user://settings.cfg` (`DEFAULT_PATH`): `sfx_on`, `music_on`, `sfx_volume_db`, `music_volume_db`, `locale`. Setting a property applies it to the buses, saves and emits `changed`. First, so `Content` sees `locale`. |
+| 1 | `Settings` | `autoload/settings.gd` | Loads `user://settings.cfg` (`DEFAULT_PATH`): `sfx_on`, `music_on`, `sfx_volume_db`, `music_volume_db`, `locale`, `letter_case`. Setting a property applies it to the buses, saves and emits `changed`. `display_text(text)` applies the letter case. First, so `Content` sees `locale`. |
 | 2 | `Content` | `autoload/content.gd` | Loads every JSON file under `res://content`, resolves the word pack for `Settings.locale` (fallback `en`), and pushes an error for each `validate()` problem without failing startup. |
 | 3 | `Art` | `autoload/art.gd` | `sprite(id)`, `font()`, `theme()`, `theme_color(role)`, `bevel_style(...)`. Sets the theme and clear color on the root window. Reads `Content`. |
 | 4 | `Audio` | `autoload/audio.gd` | `play_sfx(id, pitch_scale := 1.0)` on a pool of 6 players on the `SFX` bus; `play_music(id, fade)` / `stop_music(fade)` on the `Music` bus. Synthesizes every sound on startup. Reads `Content`. |
@@ -75,7 +90,7 @@ or temp settings path. Tests use that; see
 
 | Screen id | Scene | Params |
 |-----------|-------|--------|
-| `main_menu` | `screens/main_menu.tscn` | none: title, one tile per catalog mode, sound toggle |
+| `main_menu` | `screens/main_menu.tscn` | none: title, one tile per catalog mode (sized to fit), case and sound toggles |
 | `mode_menu` | `screens/mode_menu.tscn` | `mode_id`: one tile per game of the mode |
 | `level_select` | `screens/level_select.tscn` | `game_id`: one tile per level, with 1–3 stars |
 | `game` | `core/game_shell.tscn` | `game_id`, `level_id` (`""` without levels), optional `seed` |
@@ -125,8 +140,8 @@ numbers (JSON numbers can be floats), otherwise by type and value.
   (`emulate_mouse_from_touch=true`, `emulate_touch_from_mouse=false`), and every
   button is a `KidButton` (`ui/kid_button.gd`). It plays `tap` on press, acts on
   release (dragging off cancels), takes no keyboard focus, and can grow its hit area
-  with `touch_margin`. The 24×24 back button and sound toggle use a 4 px margin to
-  reach 32×32. Nothing depends on hover.
+  with `touch_margin`. The 24×24 back button, sound toggle and case toggle use a
+  4 px margin to reach 32×32. Nothing depends on hover.
 - Font sizes are 9, 18 and 27 only (`Art.FONT_SMALL/MEDIUM/LARGE`; theme variations
   `LabelMedium`, `LabelLarge`, `ButtonMedium`, `ButtonLarge`), because the bitmap font
   scales by whole pixels.
@@ -141,10 +156,18 @@ only when a setting changes. Missing or wrong-typed values fall back to
 `Settings.DEFAULTS`. Any debug option (`--smoke-test`, `--open`, `--screen`) sets
 `Settings.path = ""`, so nothing is saved during that run.
 
+| Key | Default | Set by |
+|-----|---------|--------|
+| `sfx_on` | `true` | the speaker toggle on the main menu (`ui/sound_toggle.gd`) |
+| `music_on`, `sfx_volume_db`, `music_volume_db` | `true`, `0.0`, `0.0` | code only, no UI yet |
+| `locale` | `en` | code only (the word pack) |
+| `letter_case` | `upper` | the `ABC`/`abc` toggle left of the speaker (`ui/case_toggle.gd`); `upper` or `lower`, anything else falls back to `upper` |
+
 `locale` picks the word pack only. UI text follows Godot's translation locale (the
-OS locale, falling back to `en`). v1 has no language picker, and changing
-`Settings.locale` at runtime doesn't reload `Content`. See
-[content-and-localization.md](content-and-localization.md).
+OS locale, falling back to `en`). There's no language picker, and changing
+`Settings.locale` at runtime doesn't reload `Content`. `letter_case` changes only
+how the word game shows its word and letter buttons; the content and the answers
+stay lowercase. See [content-and-localization.md](content-and-localization.md).
 
 ## Key design decisions
 

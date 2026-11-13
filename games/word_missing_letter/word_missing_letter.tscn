@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://games/word_missing_letter/word_missing_letter.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://ui/choice_row.tscn" id="2_choices"]
 
 [node name="WordMissingLetter" type="Control"]
 layout_mode = 3
@@ -54,12 +55,9 @@ size_flags_vertical = 3
 size_flags_stretch_ratio = 2.0
 mouse_filter = 2
 
-[node name="Choices" type="HBoxContainer" parent="Layout"]
+[node name="Choices" parent="Layout" instance=ExtResource("2_choices")]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 8
-alignment = 1
 
 [node name="BottomSpace" type="Control" parent="Layout"]
 layout_mode = 2

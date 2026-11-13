@@ -5,8 +5,9 @@
 ## Project Overview
 
 Kid Zone is a touch-first 8-bit learning game for young kids, in Godot 4.7 and
-GDScript. v1 has two modes with one game each: math addition (three levels) and
-an English missing-letter word game. Menus come from `content/catalog.json`, every
+GDScript. It has two modes: math, with addition and subtraction (three levels
+each), and words, with an English missing-letter game over 3- and 4-letter words
+shown in UPPERCASE or lowercase. Menus come from `content/catalog.json`, every
 sprite, the pixel font and every sound effect are generated from JSON in
 `content/`, and the build follows a maze-runner-style `Makefile`.
 
@@ -32,7 +33,8 @@ sprite, the pixel font and every sound effect are generated from JSON in
 ## Autoloads (in this order)
 
 1. `Settings` (`autoload/settings.gd`): `user://settings.cfg`, applies mute and
-   volume to the `SFX` and `Music` buses, holds the word-pack `locale`.
+   volume to the `SFX` and `Music` buses, holds the word-pack `locale` and the word
+   game's `letter_case` (`display_text()`).
 2. `Content` (`autoload/content.gd`): loads and validates every JSON in `content/`.
 3. `Art` (`autoload/art.gd`): sprite textures (PNG override or grid), pixel font,
    UI theme.
@@ -47,13 +49,16 @@ sprite, the pixel font and every sound effect are generated from JSON in
   classes).
 - No C#, GDExtension, add-ons or external assets. Art, font and sound come from the
   repo's data.
-- Pure logic (`RoundController`, `*Generator`) takes an injected
+- Pure logic (`RoundController`, `*Generator`, `QuestionUtils`) takes an injected
   `RandomNumberGenerator`, and never calls global `randi()`/`randf()` or touches an
   autoload.
+- Games share code instead of copying it: `ChoiceRow` for answer buttons,
+  `QuestionUtils` for shuffles, number choices and letter distractors, and
+  `MathEquationGame` for `a <op> b = ?` games.
 - No hardcoded English: visible text goes through `tr()` (`content/locale/ui.csv`)
   or comes from the locale word pack.
-- Menus are built only from `content/catalog.json`. Adding a game never touches
-  menus, `Router` or `GameShell`.
+- Menus are built only from `content/catalog.json`. Adding a game or a mode never
+  touches menus, `Router` or `GameShell`.
 - Tests use temp settings paths (`Settings.load_from("user://test_settings.cfg")`)
   and delete them afterwards.
 - `icon.svg` and the `*.uid` files are committed. `*.translation` files are
@@ -64,8 +69,8 @@ sprite, the pixel font and every sound effect are generated from JSON in
 | Document | Contents |
 |----------|----------|
 | [`dev-docs/PROJECT.md`](dev-docs/PROJECT.md) | **Main doc**: architecture, autoloads and their order, screen flow, the round loop, display and input |
-| [`dev-docs/adding-a-game.md`](dev-docs/adding-a-game.md) | The `MiniGame` contract, catalog entries, levels, `ui.csv` keys; adding a mode or a level |
-| [`dev-docs/content-and-localization.md`](dev-docs/content-and-localization.md) | Content files, validation, adding words, adding a language |
+| [`dev-docs/adding-a-game.md`](dev-docs/adding-a-game.md) | The `MiniGame` contract, `ChoiceRow`, `QuestionUtils`, `MathEquationGame`; subtraction as the worked example; catalog entries, levels, `ui.csv` keys; adding a mode or a level |
+| [`dev-docs/content-and-localization.md`](dev-docs/content-and-localization.md) | Content files, validation, word packs (`known_words`, `blank`), letter case, adding words, adding a language |
 | [`dev-docs/art-and-audio.md`](dev-docs/art-and-audio.md) | Sprites, palette, font, PNG overrides, sound-effect params and overrides, music, icon |
 | [`dev-docs/testing-and-export.md`](dev-docs/testing-and-export.md) | Test runner, smoke tests, debug options, screenshots, exports |
 
@@ -79,10 +84,12 @@ Start with `dev-docs/PROJECT.md`. User-facing docs: [`README.md`](README.md).
 | `autoload/` | The five autoloads above |
 | `core/mini_game.gd`, `core/game_shell.gd` | Game contract; the round loop, stars, sounds, input lock |
 | `core/round_controller.gd` | Round bookkeeping (pure logic) |
+| `core/question_utils.gd` | `QuestionUtils`: shared static helpers for generators and validation |
 | `core/sprite_builder.gd`, `font_builder.gd`, `sfx_synth.gd` | Grid → texture, glyphs → `FontFile`, params → `AudioStreamWAV` |
-| `games/<game_id>/` | One game: scene, view script, question generator |
+| `games/<game_id>/` | One game: scene, view script, question generator (`math_addition`, `math_subtraction`, `word_missing_letter`) |
+| `games/math_common/` | `MathEquationGame` and its scene `math_equation.tscn`, shared by the math games |
 | `screens/` | `main_menu`, `mode_menu`, `level_select`, `round_end` |
-| `ui/` | `KidButton` base, `TileButton`, `ChoiceButton`, `StarBar`, `BackButton`, `SoundToggle`, `MenuTiles` |
+| `ui/` | `KidButton` base, `IconButton`, `TileButton`, `ChoiceButton`, `ChoiceRow`, `StarBar`, `BackButton`, `SoundToggle`, `CaseToggle`, `MenuTiles` |
 | `content/` | All game data (JSON, `locale/ui.csv`) |
 | `tests/` | `run_tests.tscn`, `test_runner.gd`, `test_case.gd` (`TestCase`), `test_*.gd` |
 | `Makefile`, `export_presets.cfg` | Build, test and export |

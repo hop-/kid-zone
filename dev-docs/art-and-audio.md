@@ -28,6 +28,9 @@ transparent (`"transparent": "."`).
   gold yellow, silver silver, and so on. A recolor is an edit there or in the
   palette.
 - Tile colors come from each mode's `color` in `catalog.json`.
+- `Art.bevel_style(fill, pressed)` builds the pixel bevel of tiles and letter
+  boxes. Styles are cached per (fill, pressed) and shared, so don't modify one; the
+  cache is dropped with the textures by `Art.clear_cache()`.
 - `project.godot`'s `default_clear_color` is the navy background. `Art` also sets
   the clear color from the palette on startup, so keep the two in step.
 
@@ -46,12 +49,21 @@ transparent (`"transparent": "."`).
 
 | File | Sprites | Size |
 |------|---------|------|
-| `icons.json` | `icon_math`, `icon_words`, `icon_addition`, `icon_missing_letter`, `icon_sound_on`, `icon_sound_off`, `icon_back`, `icon_star_empty`, `icon_star_gold`, `icon_star_silver`, `icon_again`, `icon_home` | 16×16 |
+| `icons.json` | `icon_math`, `icon_words`, `icon_addition`, `icon_subtraction`, `icon_missing_letter`, `icon_sound_on`, `icon_sound_off`, `icon_case_upper`, `icon_case_lower`, `icon_back`, `icon_star_empty`, `icon_star_gold`, `icon_star_silver`, `icon_again`, `icon_home` | 16×16 |
 | `icons.json` | `app_icon` (the source of `icon.svg`) | 32×32 |
 | `objects.json` | apple, banana, cherry, strawberry, carrot, tomato, corn, pepper, ball, teddy, duck, block | 12×12 |
-| `words.json` | `word_<id>` for each of the 20 words | 24×24 |
+| `words.json` | `word_<id>` for each of the 40 words of the `en` pack (20 of three letters, 20 of four) | 24×24 |
 
-  `Content` also reads `sprites/ui.json` if it exists; v1 doesn't need one.
+  `Content` also reads `sprites/ui.json` if it exists; the game doesn't use one.
+- Some icons to know:
+  - `icon_addition` and `icon_subtraction` are chunky yellow plus and minus signs
+    with a black outline, orange shading and a white highlight, so they stand out
+    on the red math tiles.
+  - `icon_case_upper` ("AB") and `icon_case_lower` ("ab") are the faces of the
+    letter-case toggle: a navy first letter and a red second one, drawn as sprites
+    so they need no translation. Like the sound icons, they're in
+    `Content.REQUIRED_SPRITES`.
+  - `word_ball` is a beach ball, so it doesn't look like the 12×12 counting `ball`.
 - `Art.sprite(id)` builds the texture with `core/sprite_builder.gd` and caches it.
   Textures use nearest filtering (the project default). Mode, game and round-end
   tile icons are drawn at 2×, level-tile stars at 1×, word pictures at 2× in the
@@ -86,7 +98,10 @@ example, `assets/sprites/apple.png` replaces the apple everywhere.
   with at most 5 px of ink width. Rows 7 and 8 (from `baseline`) are for
   descenders (g, j, p, q, y). The advance is the ink width plus `spacing`, unless
   the glyph is an object with `advance` (and optionally `rows`).
-- v1 has a–z, A–Z, 0–9, `! + , - . : = ? _` and space.
+- The font has a–z, A–Z, 0–9, `! + , - . : = ? _` and space.
+- `l` is a plain 7-px vertical stroke with no serif or foot. `i` has a dot, `I` has
+  serifs at both ends, `1` has a flag and a base, and `!` has a gap, so none of
+  them can be mistaken for it on the letter buttons.
 - `core/font_builder.gd` packs the glyphs into one atlas and builds a `FontFile` with
   `fixed_size = 9` and integer-only scaling, so the only crisp sizes are 9, 18 and
   27 (`Art.FONT_SMALL`, `FONT_MEDIUM`, `FONT_LARGE`). The label's font color tints
@@ -127,7 +142,7 @@ first) replaces the synthesized sound with that id.
 
 ## Music
 
-v1 ships no tracks, but the API and the `Music` bus are ready.
+The game ships no tracks, but the API and the `Music` bus are ready.
 
 1. Put the track in `res://assets/music/<id>.ogg` (or `.wav`).
 2. Call `Audio.play_music("<id>")` where it should start, for example in a screen's
