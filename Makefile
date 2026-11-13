@@ -17,7 +17,8 @@ NAME      := kid-zone
 
 # Android release signing: a git-ignored .env of unquoted KEY=value lines, as printed
 # by `make android-keystore`. Values from .env win over the same variables in the
-# environment.
+# environment. Make reads them as makefile lines: `#` starts a comment (write `\#`)
+# and `$` expands (write `$$`).
 -include .env
 export GODOT_ANDROID_KEYSTORE_RELEASE_PATH GODOT_ANDROID_KEYSTORE_RELEASE_USER GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
 
@@ -167,6 +168,7 @@ android-keystore: ## Create your Android release signing key (asks for a passwor
 	@echo "  GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$(ANDROID_KEYSTORE)"
 	@echo "  GODOT_ANDROID_KEYSTORE_RELEASE_USER=$(NAME)"
 	@echo "  GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=<your password>"
+	@echo 'make reads .env as makefile lines: in a value, write # as \# and $$ as $$$$.'
 
 android-install: $(ANDROID_BIN) ## Install the APK on a USB-connected phone (USB debugging on)
 	"$(ANDROID_SDK)/platform-tools/adb" install -r $(ANDROID_BIN)

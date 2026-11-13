@@ -12,7 +12,7 @@ const FANFARE_SFX := "fanfare"
 
 var _game_id := ""
 var _level_id := ""
-var _stars: Array = []
+var _stars: Array[int] = []
 
 @onready var _star_bar: StarBar = %Stars
 @onready var _buttons: HBoxContainer = %Buttons
@@ -21,8 +21,12 @@ var _stars: Array = []
 func setup_screen(params: Dictionary) -> void:
 	_game_id = str(params.get("game_id", ""))
 	_level_id = str(params.get("level_id", ""))
+	_stars.clear()
 	var stars: Variant = params.get("stars", [])
-	_stars = stars if stars is Array else []
+	if stars is Array:
+		# Router params may hold an untyped Array (JSON numbers can be floats).
+		for star: Variant in stars:
+			_stars.append(int(star))
 
 
 func _ready() -> void:

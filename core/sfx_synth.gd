@@ -102,14 +102,6 @@ static func to_pcm16(samples: PackedFloat32Array) -> PackedByteArray:
 	return bytes
 
 
-## The sound's length in seconds; 0 when the parameters are unusable.
-static func duration(params: Dictionary) -> float:
-	var length := 0.0
-	for segment in _segments(params):
-		length += segment[2]
-	return length
-
-
 ## [from_hz, to_hz, seconds] for each note, or the one sweep. Bad entries are skipped.
 static func _segments(params: Dictionary) -> Array[Array]:
 	var segments: Array[Array] = []

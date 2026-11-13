@@ -5,11 +5,16 @@ tablets and touch, and works just as well with a mouse on a desktop. A kid who
 can't read yet picks a mode from big picture tiles and plays a round of 10
 questions:
 
-- **Math, addition.** `a + b = ?`, with that many fruits, vegetables or toys
-  above each number to count. Three levels: easy (sums up to 5), medium (up to
-  10) and hard (each number 1–12).
+- **Math, add.** `a + b = ?`, with that many fruits, vegetables or toys above
+  each number to count. Three levels: easy (sums up to 5), medium (up to 10) and
+  hard (each number 1–12, sums of 11 or more).
+- **Math, minus.** `a - b = ?`, with a objects above `a` and b objects above `b`.
+  Three levels: easy (`a` up to 5), medium (up to 10) and hard (`a` from 8 to 12).
+  `b` is at least 1, and the answer can be 0.
 - **Words, missing letter.** A picture and its English word with one letter
-  missing (`s_n` and a sun). Exactly one of the four letters makes a real word.
+  missing (`S_N` and a sun). The 40 words have three or four letters, mixed at
+  random. Exactly one of the four letters makes a real word. Words and letters
+  show in UPPERCASE, or in lowercase with the `ABC`/`abc` toggle.
 
 Every sprite, the pixel font and every sound effect are generated from JSON
 data in `content/`. The project has no image, font or audio files, except the
@@ -18,8 +23,8 @@ app icon, which is also generated.
 ## How to play
 
 1. On the main menu, tap **math** or **words**.
-2. Tap a game. Math then asks for a level: **easy**, **medium** or **hard**,
-   shown with 1, 2 or 3 stars.
+2. Tap a game: **add** or **minus** in math, **letters** in words. Math then asks
+   for a level: **easy**, **medium** or **hard**, shown with 1, 2 or 3 stars.
 3. Tap the answer. A wrong answer plays a soft sound, and its button shakes,
    greys out and can't be tapped again. Try again until it's right. A right
    answer fills the blank, and the next question comes.
@@ -32,12 +37,14 @@ app icon, which is also generated.
 | Choose          | Tap                          | Click          | none     |
 | Back one screen | `<` at the top left, Android back | Click `<` | Esc      |
 | Sound on/off    | Speaker at the top right of the main menu | Click it | none |
+| UPPERCASE/lowercase words | `AB`/`ab` button left of the speaker | Click it | none |
 
 Buttons act when you let go, so sliding a finger off a button cancels the tap.
 Back does nothing on the main menu, so a kid can't leave the game by accident.
 Close the window, or use the phone's home button, to quit.
 
-The sound setting is remembered in `user://settings.cfg`. On Linux that's
+The sound and letter-case settings are remembered in `user://settings.cfg`. The
+letter case changes only the word game's word and letter buttons. On Linux that's
 `~/.local/share/godot/app_userdata/Kid Zone/settings.cfg`.
 
 ## Running
@@ -60,6 +67,7 @@ one is in use, the game never saves settings.
 
 ```bash
 godot --path . -- --open=math_addition:hard --seed=3   # a game (and level), with fixed questions
+godot --path . -- --open=math_subtraction:easy
 godot --path . -- --open=word_missing_letter
 godot --path . -- --screen=mode_menu:words             # main_menu | mode_menu:<mode> |
 godot --path . -- --screen=level_select:math_addition  #   level_select:<game> |
@@ -139,7 +147,8 @@ GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=your password
 
 - Don't quote the values; quotes would become part of the value. Leave no
   trailing spaces.
-- Write a `$` in the password as `$$`.
+- Write a `$` in the password as `$$`, and a `#` as `\#`. An unescaped `#` starts
+  a comment, which silently cuts the password short there.
 - A value in `.env` wins over the same variable in your environment. A variable
   on the command line (`make android GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=...`)
   wins over `.env`. Without a `.env`, exported environment variables work, as in
@@ -183,10 +192,12 @@ icon.svg              app icon, generated from the app_icon sprite (make icon)
 main.tscn, main.gd    root scene: screen host + fade; debug options and smoke test
 autoload/             Settings, Content, Art, Audio, Router (loaded in that order)
 core/                 MiniGame contract, GameShell (round loop), RoundController,
-                      sprite/font builders, sound synthesizer
-games/                one folder per game: its scene, view script and question generator
+                      QuestionUtils, sprite/font builders, sound synthesizer
+games/                one folder per game: its scene, view script and question generator;
+                      math_common/ holds the equation view both math games share
 screens/              main menu, mode menu, level select, round end
-ui/                   buttons, tiles, choice buttons, star bar, back button, sound toggle
+ui/                   buttons, tiles, choice buttons and row, star bar, back button,
+                      sound and letter-case toggles
 content/              catalog, palette, objects, font, sounds, sprites, word packs, UI text
 tools/export_icon.gd  writes icon.svg
 tests/                test runner, TestCase base, test_*.gd

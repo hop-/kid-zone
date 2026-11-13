@@ -15,8 +15,8 @@ extends Node
 ## afterwards), point `override_root` at a fixture folder, or set `content` to another
 ## `Content` instance.
 
-const _SpriteBuilder := preload("res://core/sprite_builder.gd")
-const _FontBuilder := preload("res://core/font_builder.gd")
+## The Content script, for typing `content` (the autoload's name is taken by the node).
+const ContentScript := preload("res://autoload/content.gd")
 
 const DEFAULT_OVERRIDE_ROOT := "res://assets/sprites"
 ## The font's pixel height (font.json `height`); the theme's base font size.
@@ -64,12 +64,14 @@ var override_root: String = DEFAULT_OVERRIDE_ROOT:
 		_textures.clear()
 ## The Content node to read grids, palette and font from; null means the `Content`
 ## autoload.
-var content: Node = null:
+var content: ContentScript = null:
 	set(value):
 		content = value
 		clear_cache()
 
 var _textures: Dictionary[String, Texture2D] = {}
+## `bevel_style()` results, keyed by `_bevel_key(fill, pressed)`.
+var _bevels: Dictionary[String, StyleBoxTexture] = {}
 var _font: FontFile = null
 var _theme: Theme = null
 var _missing_texture: Texture2D = null
@@ -85,10 +87,11 @@ func apply_to_window(window: Window) -> void:
 	RenderingServer.set_default_clear_color(theme_color("background"))
 
 
-## Drops every built texture, the font and the theme, so they are rebuilt from the
-## current content on next use.
+## Drops every built texture, bevel style, the font and the theme, so they are rebuilt
+## from the current content on next use.
 func clear_cache() -> void:
 	_textures.clear()
+	_bevels.clear()
 	_font = null
 	_theme = null
 
@@ -102,23 +105,15 @@ func sprite(sprite_id: String) -> Texture2D:
 		return _textures[sprite_id]
 	var texture := _override_texture(sprite_id)
 	if texture == null:
-		var data: Variant = _content()
+		var data := _content()
 		if data != null and data.has_sprite_grid(sprite_id):
-			texture = _SpriteBuilder.build_texture(data.sprite_grid(sprite_id),
+			texture = SpriteBuilder.build_texture(data.sprite_grid(sprite_id),
 					data.palette_by_key(), data.transparent_key())
 	if texture == null:
 		push_error("Art: no sprite '%s'" % sprite_id)
 		return _placeholder()
 	_textures[sprite_id] = texture
 	return texture
-
-
-## True when `sprite(id)` would find an override PNG or a grid.
-func has_sprite(sprite_id: String) -> bool:
-	if _textures.has(sprite_id) or ResourceLoader.exists(_override_path(sprite_id)):
-		return true
-	var data: Variant = _content()
-	return data != null and data.has_sprite_grid(sprite_id)
 
 
 ## True when the sprite comes from an override PNG.
@@ -143,7 +138,7 @@ func _override_texture(sprite_id: String) -> Texture2D:
 func _placeholder() -> Texture2D:
 	if _missing_texture == null:
 		var image := Image.create_empty(8, 8, false, Image.FORMAT_RGBA8)
-		image.fill(_SpriteBuilder.INVALID_COLOR)
+		image.fill(SpriteBuilder.INVALID_COLOR)
 		_missing_texture = ImageTexture.create_from_image(image)
 	return _missing_texture
 
@@ -154,8 +149,8 @@ func _placeholder() -> Texture2D:
 ## can't be built.
 func font() -> Font:
 	if _font == null:
-		var data: Variant = _content()
-		_font = _FontBuilder.build(data.font_data()) if data != null else null
+		var data := _content()
+		_font = FontBuilder.build(data.font_data()) if data != null else null
 		if _font == null:
 			push_error("Art: cannot build the pixel font from font.json")
 			return ThemeDB.fallback_font
@@ -165,7 +160,7 @@ func font() -> Font:
 ## The palette color for a theme role (see `THEME_COLORS`), or a palette color name.
 func theme_color(role: String) -> Color:
 	var color_name: String = THEME_COLORS.get(role, role)
-	var data: Variant = _content()
+	var data := _content()
 	if data == null:
 		return Color.MAGENTA
 	return data.color(color_name)
@@ -173,8 +168,16 @@ func theme_color(role: String) -> Color:
 
 ## A pixel-bevel button style with `fill` inside: a dark outline, a light top-left
 ## edge and a dark bottom-right edge. `pressed` swaps the edges, so the button looks
-## pushed in. Use it for tiles with their own color.
+## pushed in. Use it for tiles with their own color. Styles are cached per
+## (`fill`, `pressed`) and shared, so don't modify the one returned.
 func bevel_style(fill: Color, pressed: bool = false) -> StyleBoxTexture:
+	var key := _bevel_key(fill, pressed)
+	if not _bevels.has(key):
+		_bevels[key] = _build_bevel(fill, pressed)
+	return _bevels[key]
+
+
+func _build_bevel(fill: Color, pressed: bool) -> StyleBoxTexture:
 	var light := theme_color("bevel_light")
 	var dark := theme_color("bevel_dark")
 	if pressed:
@@ -264,15 +267,19 @@ func theme() -> Theme:
 	return _theme
 
 
+static func _bevel_key(fill: Color, pressed: bool) -> String:
+	return "%s/%s" % [fill.to_html(), "pressed" if pressed else "normal"]
+
+
 static func _add_variation(target: Theme, variation: StringName, base: StringName, size: int) -> void:
 	target.set_type_variation(variation, base)
 	target.set_font_size(&"font_size", variation, size)
 
 
-func _content() -> Node:
+func _content() -> ContentScript:
 	if content != null:
 		return content
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or tree.root == null:
 		return null
-	return tree.root.get_node_or_null(^"Content")
+	return tree.root.get_node_or_null(^"Content") as ContentScript

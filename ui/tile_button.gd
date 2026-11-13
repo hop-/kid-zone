@@ -4,36 +4,45 @@ extends KidButton
 ## tile in a palette color. Main menu, mode menu, level select and round end use it.
 ##
 ## Set it up with `setup()` (or the properties) before or after it enters the tree.
+## `setup()` rebuilds the tile once, and a property rebuilds it only when it changes.
 ## The content shifts down 1 px while pressed, like the bevel.
 
 ## Sprite ids shown in a row, e.g. `["icon_math"]` or three `icon_star_gold`.
 @export var icon_ids: PackedStringArray = []:
 	set(value):
-		icon_ids = value
-		_refresh()
+		if value != icon_ids:
+			icon_ids = value
+			_changed()
 ## Each icon is drawn at this integer scale.
 @export var icon_scale: int = 2:
 	set(value):
-		icon_scale = maxi(1, value)
-		_refresh()
+		if maxi(1, value) != icon_scale:
+			icon_scale = maxi(1, value)
+			_changed()
 ## A translation key from ui.csv or the catalog; shown through `tr()`.
 @export var label_key: String = "":
 	set(value):
-		label_key = value
-		_refresh()
+		if value != label_key:
+			label_key = value
+			_changed()
 ## A palette color name for the tile; "" keeps the theme's default button.
 @export var color_name: String = "":
 	set(value):
-		color_name = value
-		_refresh()
+		if value != color_name:
+			color_name = value
+			_changed()
 ## The label's theme type variation (`LabelMedium` = 18 px, "" = 9 px).
 @export var label_variation: StringName = &"LabelMedium":
 	set(value):
-		label_variation = value
-		_refresh()
+		if value != label_variation:
+			label_variation = value
+			_changed()
 
 ## The value the screen attached to this tile (a mode, game or level id).
 var item_id: String = ""
+
+## True while `setup()` assigns the properties, so they rebuild the tile only once.
+var _batch := false
 
 @onready var _content: VBoxContainer = $Content
 @onready var _icons: HBoxContainer = $Content/Icons
@@ -45,10 +54,13 @@ func setup(id: String, icons: PackedStringArray, key: String, color: String,
 		min_size: Vector2, icons_scale: int = 2) -> void:
 	item_id = id
 	custom_minimum_size = min_size
+	_batch = true
 	icon_ids = icons
 	icon_scale = icons_scale
 	label_key = key
 	color_name = color
+	_batch = false
+	_refresh()
 
 
 ## The label's shown (translated) text.
@@ -67,6 +79,13 @@ func _notification(what: int) -> void:
 		_content.position = Vector2(shift, shift)
 
 
+func _changed() -> void:
+	if not _batch:
+		_refresh()
+
+
+## Rebuilds the icons, label and bevel styles (a no-op until the node is ready; `_ready`
+## refreshes).
 func _refresh() -> void:
 	if not is_node_ready():
 		return

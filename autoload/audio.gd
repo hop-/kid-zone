@@ -19,7 +19,8 @@ extends Node
 ## to play, free it afterwards), point `sfx_root` or `music_root` at a fixture folder,
 ## or set `content` to another `Content` instance.
 
-const _SfxSynth := preload("res://core/sfx_synth.gd")
+## The Content script, for typing `content` (the autoload's name is taken by the node).
+const ContentScript := preload("res://autoload/content.gd")
 
 const SFX_BUS := &"SFX"
 const MUSIC_BUS := &"Music"
@@ -42,7 +43,7 @@ var music_root: String = DEFAULT_MUSIC_ROOT:
 	set(value):
 		music_root = value.trim_suffix("/")
 ## The Content node to read sfx.json from; null means the `Content` autoload.
-var content: Node = null:
+var content: ContentScript = null:
 	set(value):
 		content = value
 		clear_cache()
@@ -105,32 +106,19 @@ func sfx_stream(sound_id: String) -> AudioStream:
 		return _streams[sound_id]
 	var stream := _load_override(sfx_root, sound_id, SFX_EXTENSIONS)
 	if stream == null:
-		var data: Variant = _content()
+		var data := _content()
 		if data != null:
-			var params: Dictionary = data.sound(sound_id)
+			var params := data.sound(sound_id)
 			if not params.is_empty():
-				stream = _SfxSynth.render(params, data.sfx_sample_rate())
+				stream = SfxSynth.render(params, data.sfx_sample_rate())
 	if stream != null:
 		_streams[sound_id] = stream
 	return stream
 
 
-## True when `play_sfx(id)` would find an override file or sfx.json parameters.
-func has_sfx(sound_id: String) -> bool:
-	if _streams.has(sound_id) or not _override_path(sfx_root, sound_id, SFX_EXTENSIONS).is_empty():
-		return true
-	var data: Variant = _content()
-	return data != null and not data.sound(sound_id).is_empty()
-
-
-## True when the sound comes from a file in `sfx_root`.
-func is_sfx_overridden(sound_id: String) -> bool:
-	return not _override_path(sfx_root, sound_id, SFX_EXTENSIONS).is_empty()
-
-
 ## Builds (and caches) the stream of every sound in sfx.json.
 func preload_sfx() -> void:
-	var data: Variant = _content()
+	var data := _content()
 	if data == null:
 		return
 	for sound_id in data.sound_ids():
@@ -178,16 +166,6 @@ func play_music(music_id: String, fade: float = DEFAULT_FADE) -> void:
 func stop_music(fade: float = DEFAULT_FADE) -> void:
 	_music_id = ""
 	_crossfade(null, fade)
-
-
-## The id of the track playing (or fading in); empty when none.
-func current_music() -> String:
-	return _music_id
-
-
-## True when a track file exists for `music_id`.
-func has_music(music_id: String) -> bool:
-	return not _override_path(music_root, music_id, MUSIC_EXTENSIONS).is_empty()
 
 
 ## Fades `fade_in` (null for none) from silence to full volume, and every other playing
@@ -253,7 +231,12 @@ func _load_override(root: String, item_id: String, extensions: PackedStringArray
 	return stream
 
 
-func _content() -> Node:
+## `content`, or the `Content` autoload looked up through the main loop, so an instance
+## outside the tree finds it too (as `Art` does).
+func _content() -> ContentScript:
 	if content != null:
 		return content
-	return get_node_or_null(^"/root/Content")
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	return tree.root.get_node_or_null(^"Content") as ContentScript

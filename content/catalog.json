@@ -12,7 +12,18 @@
           "levels": [
             {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "params": {"max_sum": 5}},
             {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "params": {"max_sum": 10}},
-            {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "params": {"max_addend": 12}}
+            {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "params": {"max_addend": 12, "min_sum": 11}}
+          ]
+        },
+        {
+          "id": "math_subtraction", "title_key": "GAME_MATH_SUBTRACTION", "icon": "icon_subtraction",
+          "scene": "res://games/math_subtraction/math_subtraction.tscn",
+          "round_length": 10,
+          "params": {},
+          "levels": [
+            {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "params": {"max_minuend": 5}},
+            {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "params": {"max_minuend": 10}},
+            {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "params": {"min_minuend": 8, "max_minuend": 12}}
           ]
         }
       ]

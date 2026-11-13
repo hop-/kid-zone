@@ -14,11 +14,11 @@ const ICON_ID := "app_icon"
 const OUTPUT := "res://icon.svg"
 ## Output pixels per grid pixel (32 x 8 = 256 px, like maze-runner's icon).
 const SCALE := 8
-const _Content := preload("res://autoload/content.gd")
+const ContentScript := preload("res://autoload/content.gd")
 
 
 func _init() -> void:
-	var content: Node = _Content.new()
+	var content: ContentScript = ContentScript.new()
 	content.load_content()
 	var error := export_icon(content, OUTPUT)
 	content.free()
@@ -30,7 +30,7 @@ func _init() -> void:
 
 
 ## Writes the SVG for `ICON_ID` from `content` to `path`.
-static func export_icon(content: Node, path: String) -> Error:
+static func export_icon(content: ContentScript, path: String) -> Error:
 	var svg := build_svg(content.sprite_grid(ICON_ID), content.palette_by_key(),
 			content.transparent_key())
 	if svg.is_empty():

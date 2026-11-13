@@ -40,16 +40,15 @@ all five.
 Rules for game code:
 
 - Use only the `rng` passed to `setup()`; never global `randi()`, `randf()`,
-  `shuffle()` or `pick_random()`. A seed (`--open=<game> --seed=<n>`) then replays
-  the same round.
+  `shuffle()` or `pick_random()`. Use `QuestionUtils.shuffle(array, rng)` to
+  shuffle. A seed (`--open=<game> --seed=<n>`) then replays the same round.
 - Put question generation in a pure `RefCounted` class with a `class_name` (like
-  `games/math_addition/addition_generator.gd`). It takes the params and the RNG,
-  and doesn't touch autoloads, so tests can run it 1000 times.
+  `games/math_subtraction/subtraction_generator.gd`). It takes the params and the
+  RNG, and doesn't touch autoloads, so a probe or a test can run it 1000 times.
 - Don't repeat the same question twice in a row.
-- Use `ChoiceButton` (`ui/choice_button.tscn`) for answers. Connect its
-  `chosen(value)` to `choice_made.emit`, and await its `show_wrong()` /
-  `show_correct()` animations. It plays `tap` itself. Keep answer buttons at least
-  40×32 and touch targets at least 32×32 virtual px.
+- Show the answers in a `ChoiceRow` (`ui/choice_row.tscn`) instead of building
+  buttons yourself. Keep answer buttons at least 40×32 and touch targets at least
+  32×32 virtual px.
 - No hardcoded English. Numbers and signs are fine; words come from a word pack or
   `tr()`.
 - Read sprites with `Art.sprite(id)` and colors with `Art.theme_color(role)` or
@@ -57,151 +56,170 @@ Rules for game code:
   `ButtonLarge` theme variations are 27).
 - Set `mouse_filter = 2` (ignore) on layout containers, so they don't eat taps.
 
-## Step by step
+## Shared parts
 
-This example adds `math_counting` to the math mode: count the apples and tap their
-number.
+Use these instead of copying code from another game.
 
-1. **Create `games/math_counting/math_counting.gd`:**
+### `ChoiceRow` (`ui/choice_row.gd` + `.tscn`)
+
+A centered `HBoxContainer` of `ChoiceButton`s, 8 px apart. Every game uses one for
+its answers.
+
+```gdscript
+class_name ChoiceRow extends HBoxContainer
+signal chosen(value)                    # a button was tapped; connect it to choice_made.emit
+func set_choices(values: Array, button_size: Vector2, texts: Array = []) -> void
+func buttons() -> Array[ChoiceButton]   # in screen order
+func button_for(value) -> ChoiceButton  # same type and value, or null
+func show_wrong(value) -> void          # shake + grey out that button; awaitable
+func show_correct(value) -> void        # green + hop; awaitable
+```
+
+- `set_choices()` shows one button per value, reuses the buttons it has, resets
+  them, and sizes them to `button_size`. A button's text is `str(value)`, or the
+  entry of `texts` at the same index. The word game passes uppercase `texts` and
+  keeps the lowercase letters as `values`, so the value a tap reports doesn't
+  depend on the letter case.
+- A `ChoiceButton` plays `tap` itself. The wrong and correct sounds belong to the
+  shell.
+
+### `QuestionUtils` (`core/question_utils.gd`)
+
+Static, pure helpers for generators and for `Content` validation:
+
+| Function | Does |
+|----------|------|
+| `shuffle(values, rng)` | Fisher–Yates with the injected RNG |
+| `number_choices(answer, count, min_value, max_value, rng)` | `count` unique shuffled ints in `[min_value, max_value]` (inclusive), one of them `answer`. Distractors come from `answer ± 1..3` (`NEAR_RANGE`) and widen outward only when the bounds cut those off. Pass `QuestionUtils.NO_MAX` for no upper bound. |
+| `spells_real_word(text, blank_index, letter, real_words)` | true when `letter` in the blank spells a word in `real_words` |
+| `letter_distractors(text, blank_index, alphabet, real_words)` | the letters that may be offered as wrong answers: every alphabet letter except the answer that spells no real word |
+
+The math generators use `number_choices()`. `MissingLetterGenerator` and
+`Content.count_distractors()` both use `letter_distractors()`, so the game and
+validation apply the same rule.
+
+### `MathEquationGame` (`games/math_common/`)
+
+The view of an `a <op> b = ?` math game. `math_equation_game.gd`
+(`class_name MathEquationGame extends MiniGame`) implements all five `MiniGame`
+methods, and `math_equation.tscn` is its layout:
+
+- `a` and `b` identical objects (one random object per question), in rows of 5
+  (`ROW_LENGTH`), each group 8 px above its number (the `ColumnA` / `ColumnB`
+  separation)
+- the operator label (`%Operator`), `=`, and a `?` blank that shows the answer in
+  green on a correct tap
+- a `ChoiceRow` (`%Choices`) with 48×36 buttons
+
+A math game inherits the scene and replaces the root script with one that extends
+`MathEquationGame` and overrides two virtual methods:
+
+```gdscript
+func _make_generator(params: Dictionary, object_ids: PackedStringArray,
+		rng: RandomNumberGenerator) -> RefCounted   # has generate() -> Dictionary
+func _operator_text() -> String                      # the sign, such as "-"
+```
+
+`generate()` must return `{a, b, answer, choices, object_id, ...}`. Hard levels of
+up to 12 and 12 objects (three rows each) fit at 16:9, 4:3 and 16:10.
+
+## Step by step: the subtraction game
+
+`math_subtraction` ("minus") is the worked example: a game on the shared equation
+layout. Its files are `games/math_subtraction/subtraction_generator.gd`,
+`math_subtraction.gd` and `math_subtraction.tscn`.
+
+1. **Write the generator**, `subtraction_generator.gd`: a pure class with an
+   injected RNG. It builds every valid `(a, b)` pair for the level once, then picks
+   one uniformly per question, skipping the previous pair. Shortened:
 
    ```gdscript
-   extends MiniGame
-   ## Math, counting: count the objects and tap their number.
+   class_name SubtractionGenerator
+   extends RefCounted
 
-   const CHOICE_SCENE := preload("res://ui/choice_button.tscn")
-   const CHOICE_COUNT := 3
+   const CHOICE_COUNT := 4
+   const MIN_CHOICE := 0   # 0 is a valid answer (a - a)
 
    var _rng: RandomNumberGenerator
-   var _max_count := 5
-   var _last_count := 0
-   var _question: Dictionary = {}
-
-   @onready var _objects: HBoxContainer = %Objects
-   @onready var _choices: HBoxContainer = %Choices
+   var _object_ids: PackedStringArray
+   var _pairs: Array[Vector2i] = []
+   var _last_pair_index: int = -1
 
 
-   func setup(params: Dictionary, rng: RandomNumberGenerator) -> void:
+   func _init(params: Dictionary, object_ids: PackedStringArray, rng: RandomNumberGenerator) -> void:
    	_rng = rng
-   	_max_count = maxi(int(params.get("max_count", 5)), 2)
-   	for i in CHOICE_COUNT:
-   		var button := CHOICE_SCENE.instantiate() as ChoiceButton
-   		button.chosen.connect(choice_made.emit)
-   		_choices.add_child(button)
+   	_object_ids = object_ids
+   	var max_minuend := int(params["max_minuend"])   # JSON numbers may be floats
+   	var min_minuend := maxi(int(params.get("min_minuend", 1)), 1)
+   	for a in range(min_minuend, max_minuend + 1):
+   		for b in range(1, a + 1):
+   			_pairs.append(Vector2i(a, b))
 
 
-   func next_question() -> Dictionary:
-   	var count := _rng.randi_range(1, _max_count)
-   	if count == _last_count:
-   		count = count % _max_count + 1
-   	_last_count = count
-   	var first := maxi(1, count - _rng.randi_range(0, CHOICE_COUNT - 1))
-   	var choices: Array[int] = []
-   	for i in CHOICE_COUNT:
-   		choices.append(first + i)
-   	return {"answer": count, "choices": choices}
-
-
-   func present(question: Dictionary) -> void:
-   	_question = question
-   	for child in _objects.get_children():
-   		child.queue_free()
-   	for i in int(question["answer"]):
-   		var rect := TextureRect.new()
-   		rect.texture = Art.sprite("apple")
-   		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-   		_objects.add_child(rect)
-   	var buttons := _buttons()
-   	for i in buttons.size():
-   		buttons[i].reset()
-   		buttons[i].value = question["choices"][i]
-
-
-   func show_wrong(value: Variant) -> void:
-   	var button := _button_for(value)
-   	if button != null:
-   		await button.show_wrong()
-   	feedback_done.emit()
-
-
-   func show_correct() -> void:
-   	var button := _button_for(_question["answer"])
-   	if button != null:
-   		await button.show_correct()
-   	feedback_done.emit()
-
-
-   func _buttons() -> Array[ChoiceButton]:
-   	var buttons: Array[ChoiceButton] = []
-   	for child in _choices.get_children():
-   		buttons.append(child as ChoiceButton)
-   	return buttons
-
-
-   func _button_for(value: Variant) -> ChoiceButton:
-   	for button in _buttons():
-   		if button.value == value:
-   			return button
-   	return null
+   func generate() -> Dictionary:
+   	var index := _pick_pair_index()   # uniform, never the previous pair
+   	_last_pair_index = index
+   	var pair := _pairs[index]
+   	var answer := pair.x - pair.y
+   	return {
+   		"a": pair.x, "b": pair.y, "answer": answer,
+   		"choices": QuestionUtils.number_choices(answer, CHOICE_COUNT, MIN_CHOICE,
+   				QuestionUtils.NO_MAX, _rng),
+   		"object_id": _object_ids[_rng.randi_range(0, _object_ids.size() - 1)],
+   		"key": "%d-%d" % [pair.x, pair.y],
+   	}
    ```
 
-   A real game would move `next_question()` into a generator class with tests.
+   The real file also pushes an error for missing params or object ids, and
+   documents the params. `AdditionGenerator` has the same shape, with `max_sum`,
+   `max_addend` and `min_sum`.
 
-2. **Create `games/math_counting/math_counting.tscn`** in the editor, or by hand. The
-   root is a full-rect `Control` with the script, and the containers are marked
-   unique (`%Objects`, `%Choices`):
+2. **Write the view script**, `math_subtraction.gd`. The base does everything else:
+
+   ```gdscript
+   extends MathEquationGame
+   ## Math, subtraction: `a - b = ?` on the shared equation layout.
+
+
+   func _make_generator(params: Dictionary, object_ids: PackedStringArray,
+   		rng: RandomNumberGenerator) -> RefCounted:
+   	return SubtractionGenerator.new(params, object_ids, rng)
+
+
+   func _operator_text() -> String:
+   	return "-"
+   ```
+
+3. **Make the scene**, `math_subtraction.tscn`: an inherited scene of the shared
+   one, with the root script swapped (in the editor: Scene → New Inherited Scene):
 
    ```
-   [gd_scene load_steps=2 format=3]
+   [gd_scene load_steps=3 format=3]
 
-   [ext_resource type="Script" path="res://games/math_counting/math_counting.gd" id="1_script"]
+   [ext_resource type="PackedScene" path="res://games/math_common/math_equation.tscn" id="1_base"]
+   [ext_resource type="Script" path="res://games/math_subtraction/math_subtraction.gd" id="2_script"]
 
-   [node name="MathCounting" type="Control"]
-   layout_mode = 3
-   anchors_preset = 15
-   anchor_right = 1.0
-   anchor_bottom = 1.0
-   grow_horizontal = 2
-   grow_vertical = 2
-   mouse_filter = 2
-   script = ExtResource("1_script")
-
-   [node name="Layout" type="VBoxContainer" parent="."]
-   layout_mode = 1
-   anchors_preset = 15
-   anchor_right = 1.0
-   anchor_bottom = 1.0
-   grow_horizontal = 2
-   grow_vertical = 2
-   mouse_filter = 2
-   theme_override_constants/separation = 16
-   alignment = 1
-
-   [node name="Objects" type="HBoxContainer" parent="Layout"]
-   unique_name_in_owner = true
-   layout_mode = 2
-   mouse_filter = 2
-   alignment = 1
-
-   [node name="Choices" type="HBoxContainer" parent="Layout"]
-   unique_name_in_owner = true
-   layout_mode = 2
-   mouse_filter = 2
-   theme_override_constants/separation = 8
-   alignment = 1
+   [node name="MathSubtraction" instance=ExtResource("1_base")]
+   script = ExtResource("2_script")
    ```
 
    The shell's top bar (back button and star bar) takes the top 30 px, so the game
    gets the area below it, inset 4 px: 312×146 at 16:9.
 
-3. **Add the catalog entry** to the mode's `games` in `content/catalog.json`. The
-   order in the file is the menu order.
+4. **Add the catalog entry** to the mode's `games` in `content/catalog.json`. The
+   order in the file is the menu order; subtraction comes after addition.
 
    ```json
    {
-     "id": "math_counting", "title_key": "GAME_MATH_COUNTING", "icon": "icon_addition",
-     "scene": "res://games/math_counting/math_counting.tscn",
+     "id": "math_subtraction", "title_key": "GAME_MATH_SUBTRACTION", "icon": "icon_subtraction",
+     "scene": "res://games/math_subtraction/math_subtraction.tscn",
      "round_length": 10,
-     "params": {"max_count": 5}
+     "params": {},
+     "levels": [
+       {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "params": {"max_minuend": 5}},
+       {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "params": {"max_minuend": 10}},
+       {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "params": {"min_minuend": 8, "max_minuend": 12}}
+     ]
    }
    ```
 
@@ -213,35 +231,84 @@ number.
    | `scene` | the game scene; its root must extend `MiniGame` |
    | `round_length` | questions per round, optional, default 10 |
    | `params` | passed to `setup()`, optional |
-   | `levels` | optional; without it the mode menu opens the game directly |
+   | `levels` | optional; without it the mode menu opens the game directly (see below) |
 
-4. **Add the label** to `content/locale/ui.csv`, one line per key, with a text for
+5. **Add the label** to `content/locale/ui.csv`, one line per key, with a text for
    every language column:
 
    ```csv
-   GAME_MATH_COUNTING,count
+   GAME_MATH_SUBTRACTION,minus
    ```
 
-5. **Give it an icon.** Draw a 16×16 grid in `content/sprites/icons.json` (see
-   [art-and-audio.md](art-and-audio.md)), or drop `assets/sprites/<id>.png`. The
-   example reuses `icon_addition`.
+6. **Give it an icon.** Draw a 16×16 grid in `content/sprites/icons.json` (see
+   [art-and-audio.md](art-and-audio.md)), or drop `assets/sprites/<id>.png`.
+   `icon_subtraction` is a yellow minus bar with a black outline, which stands out
+   on the red math tile.
 
-6. **Check the glyphs.** The font covers a–z, A–Z, 0–9, `! + , - . : = ? _` and
-   space. Validation checks the word packs, the digits, `+=?` and the UI strings,
-   but not other characters a new game draws. Add any it needs to
-   `content/font.json`.
+7. **Check the glyphs.** The font covers a–z, A–Z, 0–9, `! + , - . : = ? _` and
+   space. Validation checks the word packs (in both cases), the digits and signs in
+   `Content.REQUIRED_GLYPHS` (`0123456789+-=?`) and the UI strings, but not other
+   characters a game draws. Subtraction added `-` to `REQUIRED_GLYPHS`. Add any new
+   character a game draws there, and its glyph to `content/font.json`.
 
-7. **Run the checks:**
+8. **Run the checks:**
 
    ```bash
-   make smoke                                  # content is valid, the scene loads, its root is a MiniGame
-   godot --path . -- --open=math_counting --seed=1
+   make smoke                                          # content is valid, the scene loads, its root is a MiniGame
+   godot --path . -- --open=math_subtraction:hard --seed=1
    make test
    ```
 
    `Content` reports catalog problems (a missing scene, a missing title key or icon)
-   on startup and in `make smoke`. Add tests for the generator to `tests/`; see
+   on startup and in `make smoke`. To check a generator over many questions, run it
+   from a seeded test or a scratch probe; see
    [testing-and-export.md](testing-and-export.md).
+
+## A game with its own layout
+
+A game that isn't an equation extends `MiniGame` directly, as
+`games/word_missing_letter/word_missing_letter.gd` does. Instance
+`ui/choice_row.tscn` in its scene as a unique `%Choices`, and let the row do the
+button work:
+
+```gdscript
+extends MiniGame
+
+const CHOICE_SIZE := Vector2(40, 40)
+
+var _generator: CountingGenerator   # your pure generator class
+var _question: Dictionary = {}
+
+@onready var _choices: ChoiceRow = %Choices
+
+
+func setup(params: Dictionary, rng: RandomNumberGenerator) -> void:
+	_choices.chosen.connect(choice_made.emit)
+	_generator = CountingGenerator.new(params, rng)
+
+
+func next_question() -> Dictionary:
+	return _generator.generate()
+
+
+func present(question: Dictionary) -> void:
+	_question = question
+	# ... draw the question ...
+	_choices.set_choices(question["choices"], CHOICE_SIZE)
+
+
+func show_wrong(value: Variant) -> void:
+	await _choices.show_wrong(value)
+	feedback_done.emit()
+
+
+func show_correct() -> void:
+	# ... fill the blank ...
+	await _choices.show_correct(_question["answer"])
+	feedback_done.emit()
+```
+
+The catalog entry, label, icon, glyph and check steps are the same as above.
 
 ## Adding levels
 
@@ -263,7 +330,8 @@ screen, and `--open=<game>` without a level opens the first one.
 
 ## Adding a mode
 
-Add an entry to `modes` in `content/catalog.json`, with at least one game:
+Adding a mode is data only. Add an entry to `modes` in `content/catalog.json`, with
+at least one game:
 
 ```json
 {
@@ -274,7 +342,12 @@ Add an entry to `modes` in `content/catalog.json`, with at least one game:
 
 - `color` is a palette color name (`content/palette.json`), used for the mode's
   tiles. `icon` is a 16×16 sprite id, and `title_key` goes in `ui.csv`.
-- The main menu shows the modes as 120×110 tiles in one row, and only two fit in
-  320 px. A third mode needs a smaller `TILE_SIZE` in `screens/main_menu.gd`.
-  That's the one code change; the mode menu (96×96 tiles in a flow container) needs
-  none.
+- The main menu fits any number of modes. Its tiles are 120×110 while the modes fit
+  in one row at that size (two do). With more, `MenuTiles.fit_grid()` picks the
+  column count that gives the biggest tiles in the space under the title, and the
+  tiles shrink and wrap into rows. When a tile's content wouldn't fit, every tile
+  switches to 1× icons or the 9 px label, so they all match. The layout is redone
+  when the window is resized.
+- The mode menu shows a mode's games as 96×96 tiles in a flow container. Three fit
+  in one row at 320 px. A fourth wraps into a second row, which doesn't fit the
+  16:9 view.

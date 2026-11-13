@@ -1,7 +1,7 @@
 class_name RoundController
 extends RefCounted
 ## Round bookkeeping for one play-through of a mini-game: how many questions are
-## answered, how many taps each one took, and which star each one earned.
+## answered, and which star each one earned (from the taps it took).
 ##
 ## Pure logic: no scenes, no autoloads. GameShell calls `start()` once per round,
 ## then `submit(correct)` for every answer tap until `is_done()`.
@@ -13,7 +13,6 @@ enum Star { EMPTY, GOLD, SILVER }
 
 var _round_length: int = 0
 var _stars: Array[Star] = []
-var _attempts: Array[int] = []
 var _current_attempts: int = 0
 
 
@@ -24,7 +23,6 @@ func start(round_length: int) -> void:
 		round_length = 1
 	_round_length = round_length
 	_stars.clear()
-	_attempts.clear()
 	_current_attempts = 0
 
 
@@ -36,7 +34,6 @@ func submit(correct: bool) -> bool:
 	_current_attempts += 1
 	if correct:
 		_stars.append(Star.GOLD if _current_attempts == 1 else Star.SILVER)
-		_attempts.append(_current_attempts)
 		_current_attempts = 0
 	return true
 
@@ -55,21 +52,6 @@ func question_index() -> int:
 	return _stars.size()
 
 
-## Taps made so far on the current (unanswered) question.
-func current_attempts() -> int:
-	return _current_attempts
-
-
-## Taps each answered question took, in order (1 = first try).
-func attempts() -> Array[int]:
-	return _attempts.duplicate()
-
-
 ## The star of each answered question, in order (GOLD or SILVER).
 func stars() -> Array[Star]:
 	return _stars.duplicate()
-
-
-## How many answered questions earned `star`.
-func star_count(star: Star) -> int:
-	return _stars.count(star)

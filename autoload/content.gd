@@ -42,12 +42,13 @@ const REQUIRED_UI_KEYS: PackedStringArray = ["APP_TITLE", "ROUND_AGAIN", "ROUND_
 ## Sprites the UI draws directly. Catalog icons, object sprites and word pictures
 ## are checked as well.
 const REQUIRED_SPRITES: PackedStringArray = [
-	"icon_sound_on", "icon_sound_off", "icon_back", "icon_star_empty", "icon_star_gold",
-	"icon_star_silver", "icon_again", "icon_home", "app_icon",
+	"icon_sound_on", "icon_sound_off", "icon_case_upper", "icon_case_lower", "icon_back",
+	"icon_star_empty", "icon_star_gold", "icon_star_silver", "icon_again", "icon_home",
+	"app_icon",
 ]
-## Characters the games draw besides words and UI strings: the addition game's digits
-## and signs.
-const REQUIRED_GLYPHS := "0123456789+=?"
+## Characters the games draw besides words and UI strings: the math games' digits and
+## signs.
+const REQUIRED_GLYPHS := "0123456789+-=?"
 ## Glyph pixels: ink and empty.
 const GLYPH_PIXELS := "#."
 ## The widest inked glyph, in pixels.
@@ -194,10 +195,6 @@ func _settings_locale() -> String:
 
 # --- catalog ---------------------------------------------------------------------
 
-func content_root() -> String:
-	return _root
-
-
 ## The modes in menu order.
 func modes() -> Array[Dictionary]:
 	return _dicts(_catalog.get("modes"))
@@ -289,10 +286,6 @@ func palette_by_key() -> Dictionary[String, Color]:
 	return result
 
 
-func has_color(color_name: String) -> bool:
-	return _palette_names().has(color_name)
-
-
 ## The palette color with this name, or magenta (and an error) if there is none.
 func color(color_name: String) -> Color:
 	var colors: Variant = _palette.get("colors")
@@ -319,11 +312,6 @@ func object_ids() -> PackedStringArray:
 ## The word pack for the resolved locale, as `MissingLetterGenerator` takes it.
 func word_pack() -> Dictionary:
 	return _words
-
-
-## The locale of the loaded word pack ("en" when the requested one fell back).
-func word_locale() -> String:
-	return _words_locale
 
 
 func sfx_sample_rate() -> int:
@@ -380,16 +368,19 @@ func has_glyph(character: String) -> bool:
 	return glyphs is Dictionary and (glyphs as Dictionary).has(character)
 
 
-## Every character the game draws: the word pack's words and alphabet,
-## `REQUIRED_GLYPHS` and the fallback-locale UI strings.
+## Every character the game draws: the word pack's words and alphabet in both their
+## stored case and uppercase (the word game's letter case, see
+## `Settings.display_text()`), `REQUIRED_GLYPHS` and the fallback-locale UI strings.
 func required_glyph_chars() -> String:
 	var chars: Dictionary[String, bool] = {}
 	var texts: PackedStringArray = [REQUIRED_GLYPHS]
 	if _words.get("alphabet") is String:
 		texts.append(_words["alphabet"])
+		texts.append(String(_words["alphabet"]).to_upper())
 	for entry in _dicts(_words.get("words")):
 		if entry.get("text") is String:
 			texts.append(entry["text"])
+			texts.append(String(entry["text"]).to_upper())
 	texts.append_array(_ui_strings())
 	for text in texts:
 		for character in text:
@@ -695,19 +686,11 @@ func _validate_words() -> PackedStringArray:
 
 
 ## How many alphabet letters other than the answer can fill the blank without
-## spelling a word in `real_words` (lowercase pack words and known words). Mirrors
-## `MissingLetterGenerator`'s distractor rule.
+## spelling a word in `real_words` (lowercase pack words and known words): the
+## missing-letter game's distractor rule, `QuestionUtils.letter_distractors()`.
 static func count_distractors(text: String, blank_index: int, alphabet: PackedStringArray,
 		real_words: Dictionary) -> int:
-	var answer := text[blank_index]
-	var count := 0
-	for letter in alphabet:
-		if letter == answer:
-			continue
-		var spelled := (text.left(blank_index) + letter + text.substr(blank_index + 1)).to_lower()
-		if not real_words.has(spelled):
-			count += 1
-	return count
+	return QuestionUtils.letter_distractors(text, blank_index, alphabet, real_words).size()
 
 
 func _validate_sfx() -> PackedStringArray:
@@ -906,7 +889,7 @@ func _validate_glyph_coverage() -> PackedStringArray:
 		if not has_glyph(character):
 			missing.append("'%s'" % character)
 	if not missing.is_empty():
-		problems.append("%s: no glyph for %s (used by the words, the alphabet, the digits and signs, or the UI strings)"
+		problems.append("%s: no glyph for %s (used by the words or the alphabet in either case, the digits and signs, or the UI strings)"
 				% [FONT_FILE, ", ".join(missing)])
 	return problems
 

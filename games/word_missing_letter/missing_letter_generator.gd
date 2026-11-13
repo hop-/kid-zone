@@ -7,7 +7,8 @@ extends RefCounted
 ## global RNG or an autoload, so the same seed always gives the same sequence.
 ##
 ## A distractor letter is only offered when putting it in the blank spells neither a
-## pack word nor a `known_words` word, so exactly one choice completes a real word.
+## pack word nor a `known_words` word (`QuestionUtils.letter_distractors()`), so
+## exactly one choice completes a real word.
 
 var _rng: RandomNumberGenerator
 var _choice_count: int
@@ -90,28 +91,13 @@ func _pick_blank_index(word: Dictionary, text: String) -> int:
 
 
 func _build_choices(text: String, blank_index: int, answer: String) -> Array[String]:
-	var candidates: Array[String] = []
-	for letter in _alphabet:
-		if letter == answer:
-			continue
-		var spelled := (text.left(blank_index) + letter + text.substr(blank_index + 1)).to_lower()
-		if not _real_words.has(spelled):
-			candidates.append(letter)
+	var candidates := QuestionUtils.letter_distractors(text, blank_index, _alphabet, _real_words)
 	var needed := _choice_count - 1
 	if candidates.size() < needed:
 		push_error("MissingLetterGenerator: only %d valid distractors for '%s' blank %d, need %d"
 				% [candidates.size(), text, blank_index, needed])
-	_shuffle(candidates)
+	QuestionUtils.shuffle(candidates, _rng)
 	var choices: Array[String] = [answer]
 	choices.append_array(candidates.slice(0, needed))
-	_shuffle(choices)
+	QuestionUtils.shuffle(choices, _rng)
 	return choices
-
-
-## Fisher–Yates with the injected RNG (Array.shuffle() uses the global one).
-func _shuffle(values: Array) -> void:
-	for i in range(values.size() - 1, 0, -1):
-		var j := _rng.randi_range(0, i)
-		var tmp: Variant = values[i]
-		values[i] = values[j]
-		values[j] = tmp
