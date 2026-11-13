@@ -59,8 +59,4 @@ size_flags_vertical = 3
 mouse_filter = 2
 
 [node name="BackButton" parent="." instance=ExtResource("2_back")]
-layout_mode = 0
-offset_left = 4.0
-offset_top = 4.0
-offset_right = 28.0
-offset_bottom = 28.0
+layout_mode = 1

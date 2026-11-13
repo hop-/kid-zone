@@ -2,7 +2,9 @@ extends MiniGame
 ## Words, missing letter: a picture, its word as letter boxes with one blank
 ## (highlighted), and 4 letter buttons in a `ChoiceRow`. Questions come from
 ## `MissingLetterGenerator` with the locale's word pack (`Content.word_pack()`); the
-## `choices` param sets how many letters are offered (default 4).
+## `choices` param sets how many letters are offered (default 4), and the level's
+## `min_length`, `max_length` and `blank` params choose the words and the blank (see
+## `MissingLetterGenerator`).
 ##
 ## Letters are shown in the player's letter case (`Settings.display_text()`, upper by
 ## default); the choice values stay the pack's lowercase letters, so answer checking
@@ -29,13 +31,16 @@ var _filled_style: StyleBox = null
 @onready var _choices: ChoiceRow = %Choices
 
 
+func _ready() -> void:
+	_choices.chosen.connect(choice_made.emit)
+
+
 func setup(params: Dictionary, rng: RandomNumberGenerator) -> void:
 	_box_style = Art.bevel_style(Art.theme_color(BOX_COLOR))
 	_blank_style = Art.bevel_style(Art.theme_color(BLANK_COLOR))
 	_filled_style = Art.bevel_style(Art.theme_color(FILLED_COLOR))
-	_choices.chosen.connect(choice_made.emit)
 	var choice_count := int(params.get("choices", DEFAULT_CHOICES))
-	_generator = MissingLetterGenerator.new(Content.word_pack(), rng, choice_count)
+	_generator = MissingLetterGenerator.new(Content.word_pack(), rng, choice_count, params)
 
 
 func next_question() -> Dictionary:

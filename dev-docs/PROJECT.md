@@ -9,13 +9,20 @@ tablets and also with a mouse on desktops. It has:
   (`MathEquationGame`), each with countable objects above its numbers:
   - `math_addition`, "add": `a + b = ?`, levels easy (`max_sum` 5), medium
     (`max_sum` 10) and hard (`max_addend` 12, `min_sum` 11)
-  - `math_subtraction`, "minus": `a - b = ?` with a objects above `a` and b above
-    `b`, b ≥ 1 and an answer ≥ 0; levels easy (`max_minuend` 5), medium
-    (`max_minuend` 10) and hard (`min_minuend` 8, `max_minuend` 12)
+  - `math_subtraction`, "minus": `a - b = ?` with a objects above `a` and b red ✕
+    marks (the `mark_x` sprite) above `b`, b ≥ 1 and an answer ≥ 0; levels easy
+    (`max_minuend` 5), medium (`max_minuend` 10) and hard (`min_minuend` 8,
+    `max_minuend` 12)
 - **Words** mode with `word_missing_letter`: a picture and its 3- or 4-letter
-  English word with one blank and four letter choices. The 40 words are mixed at
-  random, and are shown in UPPERCASE (default) or lowercase.
-- generated sound effects with a remembered sound toggle, a remembered `ABC`/`abc`
+  English word with one blank and four letter choices, shown in UPPERCASE
+  (default) or lowercase. Levels easy (`max_length` 3, `blank` `"first"`: the 20
+  three-letter words, first letter blank), medium (`blank` `"first"`: the 37 words
+  whose first letter may be blanked) and hard (no filter: all 40 words, mixed at
+  random, any allowed blank). See
+  [content-and-localization.md](content-and-localization.md#word-levels).
+- level tiles colored by difficulty: easy green, medium orange, hard red (each
+  level's `color` in the catalog)
+- generated sound effects with a remembered sound toggle, a remembered `AB`/`ab`
   letter-case toggle, a music-ready audio layer (no tracks yet), and English-only
   but localization-ready content
 
@@ -34,10 +41,11 @@ main.tscn (Main: ScreenHost + Fade)  ──attach──►  Router (autoload)
                                             ├─ RoundController (pure logic)
                                             └─ StarBar, BackButton, input blocker
 
-math_addition    ─┐ extend MathEquationGame ─► AdditionGenerator     (pure logic,
-math_subtraction ─┘ (games/math_common)      ─► SubtractionGenerator   injected RNG)
+math_addition    ─┐ extend MathEquationGame ─► AdditionGenerator    ─┐ extend
+math_subtraction ─┘ (games/math_common)      ─► SubtractionGenerator ─┘ MathPairGenerator
 word_missing_letter ─────────────────────────► MissingLetterGenerator
-every game: answer buttons in a ChoiceRow; generators share QuestionUtils
+every generator extends QuestionGenerator (pure logic, injected RNG) and uses
+QuestionUtils; every game's answer buttons are a ChoiceRow
 
 Autoloads: Settings → Content → Art → Audio → Router
 ```
@@ -45,17 +53,22 @@ Autoloads: Settings → Content → Art → Audio → Router
 - **Data-driven catalog.** `content/catalog.json` lists the modes, each mode's
   games, each game's scene, round length, optional `levels`, and default `params`.
   The menus are built only from it.
-- **Logic and view are separate.** Question generators and `RoundController` are
-  `RefCounted` classes that take an injected `RandomNumberGenerator`. They don't use
-  scenes or autoloads, so they are deterministic and unit-testable. Game scenes
-  only present questions and report taps.
+- **Logic and view are separate.** Question generators (`QuestionGenerator`,
+  `core/question_generator.gd`) and `RoundController` are `RefCounted` classes that
+  take an injected `RandomNumberGenerator`. They don't use scenes or autoloads, so
+  they are deterministic and unit-testable. Game scenes only present questions and
+  report taps.
 - **GameShell owns the round.** Every game gets the top bar (back button and star
   bar), sounds, input locking, stars and round end for free.
 - **Shared game parts.** `ChoiceRow` (`ui/choice_row.gd`) is every game's row of
   answer buttons. `QuestionUtils` (`core/question_utils.gd`) holds the static
   shuffle, number-choice and letter-distractor rules that the generators and
   `Content` validation use. `MathEquationGame` (`games/math_common/`) is the view of
-  both math games; each one only supplies its generator and operator sign. See
+  both math games; each one only supplies its generator and operator sign (and
+  subtraction its ✕ sprite for `b`). Their generators extend `MathPairGenerator`
+  (`games/math_common/math_pair_generator.gd`), which holds the pair list, the
+  no-repeat pick, the object pick and the question shape. `MenuTiles`
+  (`ui/menu_tiles.gd`) builds and sizes the menu tiles. See
   [adding-a-game.md](adding-a-game.md).
 
 ## Autoloads and their order
@@ -91,8 +104,8 @@ or temp settings path. Tests use that; see
 | Screen id | Scene | Params |
 |-----------|-------|--------|
 | `main_menu` | `screens/main_menu.tscn` | none: title, one tile per catalog mode (sized to fit), case and sound toggles |
-| `mode_menu` | `screens/mode_menu.tscn` | `mode_id`: one tile per game of the mode |
-| `level_select` | `screens/level_select.tscn` | `game_id`: one tile per level, with 1–3 stars |
+| `mode_menu` | `screens/mode_menu.tscn` | `mode_id`: one tile per game of the mode (sized to fit) |
+| `level_select` | `screens/level_select.tscn` | `game_id`: one tile per level, with 1–3 stars, in the level's `color` (or the mode's) |
 | `game` | `core/game_shell.tscn` | `game_id`, `level_id` (`""` without levels), optional `seed` |
 | `round_end` | `screens/round_end.tscn` | `game_id`, `level_id`, `stars` |
 
@@ -101,7 +114,8 @@ or temp settings path. Tests use that; see
   place on the stack. "again" reopens the game in round end's place, and back from
   round end returns to level select (or the mode menu). "home" calls
   `Router.home()`.
-- Back requests: the on-screen `BackButton`, `ui_cancel` (Esc), and Android back
+- Back requests: the on-screen `BackButton` (on every screen but the main menu),
+  `ui_cancel` (Esc), and Android back
   (`NOTIFICATION_WM_GO_BACK_REQUEST`, with `application/config/quit_on_go_back=false`).
   `back()` on the main menu does nothing, so kids can't leave by accident.
 - Transitions fade to palette black in 4 alpha steps out and 4 in, 0.2 s in all
@@ -142,6 +156,18 @@ numbers (JSON numbers can be floats), otherwise by type and value.
   release (dragging off cancels), takes no keyboard focus, and can grow its hit area
   with `touch_margin`. The 24×24 back button, sound toggle and case toggle use a
   4 px margin to reach 32×32. Nothing depends on hover.
+- The back button (`ui/back_button.gd`) sits at the top, 4 px down, with its left
+  edge at `BackButton.EDGE_FRACTION` (0.2) of the width: x 64 at 320 px, further
+  right on wider views. That keeps it away from the left edge, where a kid's thumb
+  rests. `EDGE_FRACTION` is the only place this position is set: the button
+  anchors itself in `_ready()`, so the scenes don't hold its position and the
+  editor shows it at (0, 0). What sits beside or under it keeps clear:
+  - `BackButton.keep_clear(control)` starts a control 8 px (`SIDE_GAP`) right of the
+    button. `GameShell` uses it on `TopBar`, so the star bar is centered in the
+    space right of the button.
+  - `BackButton.CLEAR_BOTTOM` (36) is the y below which full-width content may
+    start. Round end's top spacer and the mode menu's tile area use it.
+  - Titles are centered and short, so they don't reach the button at 320 px.
 - Font sizes are 9, 18 and 27 only (`Art.FONT_SMALL/MEDIUM/LARGE`; theme variations
   `LabelMedium`, `LabelLarge`, `ButtonMedium`, `ButtonLarge`), because the bitmap font
   scales by whole pixels.
@@ -161,7 +187,7 @@ only when a setting changes. Missing or wrong-typed values fall back to
 | `sfx_on` | `true` | the speaker toggle on the main menu (`ui/sound_toggle.gd`) |
 | `music_on`, `sfx_volume_db`, `music_volume_db` | `true`, `0.0`, `0.0` | code only, no UI yet |
 | `locale` | `en` | code only (the word pack) |
-| `letter_case` | `upper` | the `ABC`/`abc` toggle left of the speaker (`ui/case_toggle.gd`); `upper` or `lower`, anything else falls back to `upper` |
+| `letter_case` | `upper` | the `AB`/`ab` toggle left of the speaker (`ui/case_toggle.gd`); `upper` or `lower`, anything else falls back to `upper` |
 
 `locale` picks the word pack only. UI text follows Godot's translation locale (the
 OS locale, falling back to `en`). There's no language picker, and changing

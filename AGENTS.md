@@ -5,11 +5,13 @@
 ## Project Overview
 
 Kid Zone is a touch-first 8-bit learning game for young kids, in Godot 4.7 and
-GDScript. It has two modes: math, with addition and subtraction (three levels
-each), and words, with an English missing-letter game over 3- and 4-letter words
-shown in UPPERCASE or lowercase. Menus come from `content/catalog.json`, every
-sprite, the pixel font and every sound effect are generated from JSON in
-`content/`, and the build follows a maze-runner-style `Makefile`.
+GDScript. It has two modes: math, with addition and subtraction (subtraction
+draws the second number as red ✕ marks), and words, with an English
+missing-letter game over 3- and 4-letter words shown in UPPERCASE or lowercase.
+Every game has easy, medium and hard levels on green, orange and red tiles. Menus
+come from `content/catalog.json`, every sprite, the pixel font and every sound
+effect are generated from JSON in `content/`, and the build follows a
+maze-runner-style `Makefile`.
 
 ## Quick Reference
 
@@ -26,6 +28,8 @@ sprite, the pixel font and every sound effect are generated from JSON in
 - **Icon**: `make icon` regenerates `icon.svg` from the `app_icon` sprite grid
 - **Display**: 320×180 viewport, `viewport` stretch, `expand` aspect, `integer`
   scale, nearest filtering; touch targets ≥ 32×32 virtual px
+- **Back button**: at the top, its left edge at `BackButton.EDGE_FRACTION` (0.2)
+  of the width (x 64 at 320 px); it places itself at runtime (`ui/back_button.gd`)
 - **Settings file**: `user://settings.cfg`
   (`~/.local/share/godot/app_userdata/Kid Zone/` on Linux). Tests and debug runs
   must never write it.
@@ -51,10 +55,12 @@ sprite, the pixel font and every sound effect are generated from JSON in
   repo's data.
 - Pure logic (`RoundController`, `*Generator`, `QuestionUtils`) takes an injected
   `RandomNumberGenerator`, and never calls global `randi()`/`randf()` or touches an
-  autoload.
+  autoload. Every question generator extends `QuestionGenerator` and overrides
+  `generate()`.
 - Games share code instead of copying it: `ChoiceRow` for answer buttons,
-  `QuestionUtils` for shuffles, number choices and letter distractors, and
-  `MathEquationGame` for `a <op> b = ?` games.
+  `QuestionUtils` for shuffles, number choices and letter distractors,
+  `MathEquationGame` for `a <op> b = ?` games, `MathPairGenerator` for their
+  questions, and `MenuTiles` for menu tiles.
 - No hardcoded English: visible text goes through `tr()` (`content/locale/ui.csv`)
   or comes from the locale word pack.
 - Menus are built only from `content/catalog.json`. Adding a game or a mode never
@@ -69,8 +75,8 @@ sprite, the pixel font and every sound effect are generated from JSON in
 | Document | Contents |
 |----------|----------|
 | [`dev-docs/PROJECT.md`](dev-docs/PROJECT.md) | **Main doc**: architecture, autoloads and their order, screen flow, the round loop, display and input |
-| [`dev-docs/adding-a-game.md`](dev-docs/adding-a-game.md) | The `MiniGame` contract, `ChoiceRow`, `QuestionUtils`, `MathEquationGame`; subtraction as the worked example; catalog entries, levels, `ui.csv` keys; adding a mode or a level |
-| [`dev-docs/content-and-localization.md`](dev-docs/content-and-localization.md) | Content files, validation, word packs (`known_words`, `blank`), letter case, adding words, adding a language |
+| [`dev-docs/adding-a-game.md`](dev-docs/adding-a-game.md) | The `MiniGame` contract, `ChoiceRow`, `QuestionUtils`, `QuestionGenerator`, `MathEquationGame`, `MathPairGenerator`; subtraction as the worked example; catalog entries, levels and their colors, `ui.csv` keys; adding a mode or a level |
+| [`dev-docs/content-and-localization.md`](dev-docs/content-and-localization.md) | Content files, validation, word packs (`known_words`, `blank`), word levels (`min_length`, `max_length`, `blank`), letter case, adding words, adding a language |
 | [`dev-docs/art-and-audio.md`](dev-docs/art-and-audio.md) | Sprites, palette, font, PNG overrides, sound-effect params and overrides, music, icon |
 | [`dev-docs/testing-and-export.md`](dev-docs/testing-and-export.md) | Test runner, smoke tests, debug options, screenshots, exports |
 
@@ -84,10 +90,11 @@ Start with `dev-docs/PROJECT.md`. User-facing docs: [`README.md`](README.md).
 | `autoload/` | The five autoloads above |
 | `core/mini_game.gd`, `core/game_shell.gd` | Game contract; the round loop, stars, sounds, input lock |
 | `core/round_controller.gd` | Round bookkeeping (pure logic) |
+| `core/question_generator.gd` | `QuestionGenerator`: the base of every question generator (virtual `generate()`) |
 | `core/question_utils.gd` | `QuestionUtils`: shared static helpers for generators and validation |
 | `core/sprite_builder.gd`, `font_builder.gd`, `sfx_synth.gd` | Grid → texture, glyphs → `FontFile`, params → `AudioStreamWAV` |
 | `games/<game_id>/` | One game: scene, view script, question generator (`math_addition`, `math_subtraction`, `word_missing_letter`) |
-| `games/math_common/` | `MathEquationGame` and its scene `math_equation.tscn`, shared by the math games |
+| `games/math_common/` | `MathEquationGame` and its scene `math_equation.tscn`, and the `MathPairGenerator` base, shared by the math games |
 | `screens/` | `main_menu`, `mode_menu`, `level_select`, `round_end` |
 | `ui/` | `KidButton` base, `IconButton`, `TileButton`, `ChoiceButton`, `ChoiceRow`, `StarBar`, `BackButton`, `SoundToggle`, `CaseToggle`, `MenuTiles` |
 | `content/` | All game data (JSON, `locale/ui.csv`) |

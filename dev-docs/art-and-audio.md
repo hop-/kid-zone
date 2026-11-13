@@ -27,7 +27,10 @@ transparent (`"transparent": "."`).
   (`autoload/art.gd`): background navy, text white, buttons white, highlight and
   gold yellow, silver silver, and so on. A recolor is an edit there or in the
   palette.
-- Tile colors come from each mode's `color` in `catalog.json`.
+- Tile colors come from `catalog.json`: each mode's `color` for its main-menu and
+  mode-menu tiles, and each level's optional `color` for its level-select tile
+  (easy green, medium orange, hard red; the mode's color when a level has none).
+  Round end's "again" and "home" tiles are green and orange (`round_end.gd`).
 - `Art.bevel_style(fill, pressed)` builds the pixel bevel of tiles and letter
   boxes. Styles are cached per (fill, pressed) and shared, so don't modify one; the
   cache is dropped with the textures by `Art.clear_cache()`.
@@ -51,7 +54,7 @@ transparent (`"transparent": "."`).
 |------|---------|------|
 | `icons.json` | `icon_math`, `icon_words`, `icon_addition`, `icon_subtraction`, `icon_missing_letter`, `icon_sound_on`, `icon_sound_off`, `icon_case_upper`, `icon_case_lower`, `icon_back`, `icon_star_empty`, `icon_star_gold`, `icon_star_silver`, `icon_again`, `icon_home` | 16×16 |
 | `icons.json` | `app_icon` (the source of `icon.svg`) | 32×32 |
-| `objects.json` | apple, banana, cherry, strawberry, carrot, tomato, corn, pepper, ball, teddy, duck, block | 12×12 |
+| `objects.json` | apple, banana, cherry, strawberry, carrot, tomato, corn, pepper, ball, teddy, duck, block (the counting objects), and `mark_x` | 12×12 |
 | `words.json` | `word_<id>` for each of the 40 words of the `en` pack (20 of three letters, 20 of four) | 24×24 |
 
   `Content` also reads `sprites/ui.json` if it exists; the game doesn't use one.
@@ -64,10 +67,14 @@ transparent (`"transparent": "."`).
     so they need no translation. Like the sound icons, they're in
     `Content.REQUIRED_SPRITES`.
   - `word_ball` is a beach ball, so it doesn't look like the 12×12 counting `ball`.
+  - `mark_x` is a bold red (`4`) ✕, 3 px wide, with a 1-px black outline.
+    Subtraction draws it b times above `b`, for the ones taken away. It's in
+    `Content.REQUIRED_SPRITES` and not in `content/objects.json`, so it's never
+    picked as a counting object.
 - `Art.sprite(id)` builds the texture with `core/sprite_builder.gd` and caches it.
   Textures use nearest filtering (the project default). Mode, game and round-end
   tile icons are drawn at 2×, level-tile stars at 1×, word pictures at 2× in the
-  word game, and objects at 1×.
+  word game, and objects and `mark_x` at 1×.
 - To add a sprite, add its grid to the right file and use its id from the catalog,
   `objects.json`, a word pack or code. `make smoke` reports bad rows, unknown
   characters and missing referenced sprites. Sprites the UI uses directly are listed
