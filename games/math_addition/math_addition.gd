@@ -5,7 +5,7 @@ extends MathEquationGame
 
 
 func _make_generator(params: Dictionary, object_ids: PackedStringArray,
-		rng: RandomNumberGenerator) -> RefCounted:
+		rng: RandomNumberGenerator) -> QuestionGenerator:
 	return AdditionGenerator.new(params, object_ids, rng)
 
 

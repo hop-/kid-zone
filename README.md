@@ -8,13 +8,15 @@ questions:
 - **Math, add.** `a + b = ?`, with that many fruits, vegetables or toys above
   each number to count. Three levels: easy (sums up to 5), medium (up to 10) and
   hard (each number 1–12, sums of 11 or more).
-- **Math, minus.** `a - b = ?`, with a objects above `a` and b objects above `b`.
-  Three levels: easy (`a` up to 5), medium (up to 10) and hard (`a` from 8 to 12).
-  `b` is at least 1, and the answer can be 0.
+- **Math, minus.** `a - b = ?`, with a objects above `a` and b red ✕ marks above
+  `b`, the ones taken away. Three levels: easy (`a` up to 5), medium (up to 10) and
+  hard (`a` from 8 to 12). `b` is at least 1, and the answer can be 0.
 - **Words, missing letter.** A picture and its English word with one letter
-  missing (`S_N` and a sun). The 40 words have three or four letters, mixed at
-  random. Exactly one of the four letters makes a real word. Words and letters
-  show in UPPERCASE, or in lowercase with the `ABC`/`abc` toggle.
+  missing (`S_N` and a sun). Exactly one of the four letters makes a real word.
+  Three levels: easy (3-letter words, the first letter missing), medium (3- and
+  4-letter words, the first letter missing) and hard (all 40 words, any letter
+  missing). Words and letters show in UPPERCASE, or in lowercase with the
+  `AB`/`ab` toggle.
 
 Every sprite, the pixel font and every sound effect are generated from JSON
 data in `content/`. The project has no image, font or audio files, except the
@@ -23,8 +25,9 @@ app icon, which is also generated.
 ## How to play
 
 1. On the main menu, tap **math** or **words**.
-2. Tap a game: **add** or **minus** in math, **letters** in words. Math then asks
-   for a level: **easy**, **medium** or **hard**, shown with 1, 2 or 3 stars.
+2. Tap a game: **add** or **minus** in math, **letters** in words. Then tap a
+   level: **easy**, **medium** or **hard**, shown with 1, 2 or 3 stars on a green,
+   orange or red tile.
 3. Tap the answer. A wrong answer plays a soft sound, and its button shakes,
    greys out and can't be tapped again. Try again until it's right. A right
    answer fills the blank, and the next question comes.
@@ -35,11 +38,13 @@ app icon, which is also generated.
 | Action          | Touch                        | Mouse          | Keyboard |
 |-----------------|------------------------------|----------------|----------|
 | Choose          | Tap                          | Click          | none     |
-| Back one screen | `<` at the top left, Android back | Click `<` | Esc      |
+| Back one screen | `<` at the top, a fifth of the way in from the left; Android back | Click `<` | Esc      |
 | Sound on/off    | Speaker at the top right of the main menu | Click it | none |
 | UPPERCASE/lowercase words | `AB`/`ab` button left of the speaker | Click it | none |
 
 Buttons act when you let go, so sliding a finger off a button cancels the tap.
+The back button sits away from the left edge, where a kid's thumb rests, so it
+isn't hit by accident.
 Back does nothing on the main menu, so a kid can't leave the game by accident.
 Close the window, or use the phone's home button, to quit.
 
@@ -68,7 +73,8 @@ one is in use, the game never saves settings.
 ```bash
 godot --path . -- --open=math_addition:hard --seed=3   # a game (and level), with fixed questions
 godot --path . -- --open=math_subtraction:easy
-godot --path . -- --open=word_missing_letter
+godot --path . -- --open=word_missing_letter           # no level: its first level (easy)
+godot --path . -- --open=word_missing_letter:medium
 godot --path . -- --screen=mode_menu:words             # main_menu | mode_menu:<mode> |
 godot --path . -- --screen=level_select:math_addition  #   level_select:<game> |
 godot --path . -- --screen=round_end                   #   round_end[:<game>[:<level>]]
@@ -192,9 +198,11 @@ icon.svg              app icon, generated from the app_icon sprite (make icon)
 main.tscn, main.gd    root scene: screen host + fade; debug options and smoke test
 autoload/             Settings, Content, Art, Audio, Router (loaded in that order)
 core/                 MiniGame contract, GameShell (round loop), RoundController,
-                      QuestionUtils, sprite/font builders, sound synthesizer
+                      QuestionGenerator, QuestionUtils, sprite/font builders,
+                      sound synthesizer
 games/                one folder per game: its scene, view script and question generator;
-                      math_common/ holds the equation view both math games share
+                      math_common/ holds the equation view and the pair generator
+                      base both math games share
 screens/              main menu, mode menu, level select, round end
 ui/                   buttons, tiles, choice buttons and row, star bar, back button,
                       sound and letter-case toggles

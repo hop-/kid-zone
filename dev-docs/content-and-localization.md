@@ -8,9 +8,9 @@ found by scanning folders: the catalog and the fixed file names say what exists.
 
 | File | Holds |
 |------|-------|
-| `catalog.json` | modes → games → levels: ids, title keys, icons, scenes, params (see [adding-a-game.md](adding-a-game.md)) |
+| `catalog.json` | modes → games → levels: ids, title keys, icons, colors, scenes, params (see [adding-a-game.md](adding-a-game.md)) |
 | `palette.json` | the 16 colors, keyed `0`–`9`, `a`–`f`, each with a name; `.` is transparent |
-| `objects.json` | the 12 counting objects for math: `id`, `category` (fruit, vegetable, toy), `sprite` |
+| `objects.json` | the 12 counting objects for math: `id`, `category` (fruit, vegetable, toy), `sprite`. Only these are picked as counting objects. |
 | `font.json` | the pixel font's glyph grids (see [art-and-audio.md](art-and-audio.md)) |
 | `sfx.json` | the sound effects as synth parameters (see [art-and-audio.md](art-and-audio.md)) |
 | `sprites/icons.json`, `objects.json`, `words.json` | sprite grids; `sprites/ui.json` is also read if it exists |
@@ -28,6 +28,7 @@ list means valid. On startup the autoload pushes each problem as an error
 Loading never crashes on bad data: accessors return empty values instead. It checks:
 
 - JSON syntax and structure, unique snake_case ids, and known palette color names
+  (mode colors, and the optional level `color`)
 - catalog scenes exist, and every title key and `REQUIRED_UI_KEYS` key has an `en`
   text
 - every referenced sprite (mode and game icons, objects, word pictures,
@@ -36,6 +37,9 @@ Loading never crashes on bad data: accessors return empty values instead. It che
 - word texts and `known_words` use only the pack's `alphabet`, `blank` indices are
   valid, `locale` matches the folder, and every allowed blank has at least 3 valid
   distractor letters (`MIN_DISTRACTORS`)
+- the word game's levels (`WORD_FILTER_GAMES`): each level's merged params have a
+  valid `blank` and length bounds, and leave at least 2 words of the active pack
+  (see [Word levels](#word-levels))
 - `sfx.json` structure, and the 5 sounds the code plays (`REQUIRED_SFX`)
 - `font.json` structure, and a glyph for every character of the active word pack
   and its alphabet, in their stored case and in uppercase (for the letter case),
@@ -82,7 +86,8 @@ MODE_MATH,math
 
 - `text` uses only characters from `alphabet`, in lowercase. The `en` pack has 40
   words: 20 of three letters and 20 of four. A round picks each question uniformly
-  from the whole pack, so the two lengths mix at random; there's no length level.
+  from the words its level plays (see [Word levels](#word-levels)), so on medium
+  and hard the two lengths mix at random.
 - `picture` is a sprite id, normally a 24×24 grid `word_<id>` in
   `sprites/words.json`, drawn at 2×.
 - `blank` (optional) lists the indices that may be hidden. Without it any letter may
@@ -107,10 +112,67 @@ The generator is `games/word_missing_letter/missing_letter_generator.gd`. It and
 `Content.count_distractors()` both use `QuestionUtils.letter_distractors()`
 (`core/question_utils.gd`), so the game and validation apply the same rule.
 
+## Word levels
+
+The word game has three levels in `content/catalog.json`, chosen on level select
+like the math levels:
+
+```json
+"levels": [
+  {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "color": "green",  "params": {"max_length": 3, "blank": "first"}},
+  {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "color": "orange", "params": {"blank": "first"}},
+  {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "color": "red",    "params": {}}
+]
+```
+
+`word_missing_letter.gd` passes the merged level params to
+`MissingLetterGenerator`, which filters the pack once, when the round starts:
+
+| Param | Values | Effect |
+|-------|--------|--------|
+| `min_length` | integer ≥ 1, optional | only words at least this long |
+| `max_length` | integer ≥ 1, optional | only words at most this long |
+| `blank` | `"any"` (default) or `"first"` | `"any"` hides a letter the word's `blank` list allows (any letter without one). `"first"` always hides the first letter, and plays only the words whose `blank` list allows index 0, or that have no list. |
+
+With the `en` pack:
+
+- **easy** plays the 20 three-letter words, always with the first letter blank.
+  Every three-letter word allows a first-letter blank.
+- **medium** plays 37 of the 40 words, always with the first letter blank. It
+  leaves out `moon` (`blank` `[3]`), `sock` (`[1, 2, 3]`) and `bell` (`[1]`). Their
+  first-letter blank is left out of their `blank` lists so that no wrong letter can
+  spell a vulgar word or a slur (the "No rude words" rule above), so a first-letter
+  level can't play them. They still come up on hard.
+- **hard** has no filter: all 40 words, any allowed blank.
+
+Other rules:
+
+- Distractors still come from every pack word and `known_words`, including the
+  words a level leaves out, so exactly one choice makes a real word on every level.
+- With `"first"` the blank takes no RNG draw. Without filter params (hard), the
+  generator picks words and blanks from the whole pack as a game without levels
+  would.
+- **Fallback:** if the params are invalid, or the filter leaves fewer than 2 words
+  (`MissingLetterGenerator.MIN_WORDS`), the generator pushes an error and plays the
+  whole pack with `"any"` blanks, so a bad catalog can't empty a round.
+- **Validation:** `Content.validate()` checks every level of the games in
+  `WORD_FILTER_GAMES` (`word_missing_letter`) with the generator's own static
+  helpers, `MissingLetterGenerator.param_problems()` and `filter_words()`. It
+  reports a `blank` other than `"any"` or `"first"`, a length bound that isn't an
+  integer ≥ 1, and a level that leaves fewer than 2 words of the active pack. A game
+  without levels is checked with its own params.
+- `--open=word_missing_letter:<level>` opens a level directly.
+  `--open=word_missing_letter` with no level opens the first level (easy), as for
+  every game with levels.
+
+When you add words, a three-letter word with a limited `blank` list that leaves out
+index 0 drops out of easy and medium. Validation catches a level left with fewer
+than 2 words, but not a smaller variety, so check the counts above.
+
 ## Letter case
 
 The word game shows its word and letter buttons in UPPERCASE by default. The
-`ABC`/`abc` toggle at the top right of the main menu (`ui/case_toggle.gd`, left of
+`AB`/`ab` toggle at the top right of the main menu (`ui/case_toggle.gd`, left of
 the sound toggle) switches to lowercase, and the choice is saved as `letter_case`
 (`upper` or `lower`) in `user://settings.cfg`.
 

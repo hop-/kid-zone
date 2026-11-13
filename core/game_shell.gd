@@ -35,6 +35,7 @@ var _locked := true
 @onready var _slot: Control = %GameSlot
 @onready var _blocker: Control = %InputBlocker
 @onready var _star_bar: StarBar = %StarBar
+@onready var _top_bar: Control = %TopBar
 
 
 func setup_screen(params: Dictionary) -> void:
@@ -50,6 +51,8 @@ func setup_screen(params: Dictionary) -> void:
 
 
 func _ready() -> void:
+	# The star bar is centered in the space right of the back button.
+	BackButton.keep_clear(_top_bar)
 	_set_locked(true)
 	_rng.seed = _seed
 	var round_length := Content.round_length(_game_id)

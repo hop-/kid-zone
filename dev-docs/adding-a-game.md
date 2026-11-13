@@ -42,9 +42,10 @@ Rules for game code:
 - Use only the `rng` passed to `setup()`; never global `randi()`, `randf()`,
   `shuffle()` or `pick_random()`. Use `QuestionUtils.shuffle(array, rng)` to
   shuffle. A seed (`--open=<game> --seed=<n>`) then replays the same round.
-- Put question generation in a pure `RefCounted` class with a `class_name` (like
-  `games/math_subtraction/subtraction_generator.gd`). It takes the params and the
-  RNG, and doesn't touch autoloads, so a probe or a test can run it 1000 times.
+- Put question generation in a pure class with a `class_name` that extends
+  `QuestionGenerator` (like `games/math_subtraction/subtraction_generator.gd`). It
+  takes the params and the RNG, and doesn't touch autoloads, so a probe or a test
+  can run it 1000 times.
 - Don't repeat the same question twice in a row.
 - Show the answers in a `ChoiceRow` (`ui/choice_row.tscn`) instead of building
   buttons yourself. Keep answer buttons at least 40×32 and touch targets at least
@@ -98,30 +99,71 @@ The math generators use `number_choices()`. `MissingLetterGenerator` and
 `Content.count_distractors()` both use `letter_distractors()`, so the game and
 validation apply the same rule.
 
+### `QuestionGenerator` (`core/question_generator.gd`)
+
+The base of every game's question generator:
+
+```gdscript
+class_name QuestionGenerator extends RefCounted
+func generate() -> Dictionary   # virtual: the next question, or {} when it can't make one
+```
+
+A generator takes its params and the injected RNG in its own `_init()`, so the base
+has no constructor arguments. The base `generate()` pushes an error and returns
+`{}`, so override it. `AdditionGenerator` and `SubtractionGenerator` extend it
+through `MathPairGenerator` (below), and `MissingLetterGenerator` extends it
+directly. A game can then type its generator as `QuestionGenerator` and call
+`generate()` on it.
+
 ### `MathEquationGame` (`games/math_common/`)
 
 The view of an `a <op> b = ?` math game. `math_equation_game.gd`
 (`class_name MathEquationGame extends MiniGame`) implements all five `MiniGame`
 methods, and `math_equation.tscn` is its layout:
 
-- `a` and `b` identical objects (one random object per question), in rows of 5
-  (`ROW_LENGTH`), each group 8 px above its number (the `ColumnA` / `ColumnB`
-  separation)
+- `a` identical objects above `a` (one random object per question), and `b` more
+  above `b`, in rows of 5 (`ROW_LENGTH`), each group 8 px above its number (the
+  `ColumnA` / `ColumnB` separation). Group b draws `_group_b_sprite()`, which is the
+  same object by default; subtraction draws red ✕ marks instead.
 - the operator label (`%Operator`), `=`, and a `?` blank that shows the answer in
   green on a correct tap
 - a `ChoiceRow` (`%Choices`) with 48×36 buttons
 
 A math game inherits the scene and replaces the root script with one that extends
-`MathEquationGame` and overrides two virtual methods:
+`MathEquationGame` and overrides two virtual methods, and optionally a third:
 
 ```gdscript
 func _make_generator(params: Dictionary, object_ids: PackedStringArray,
-		rng: RandomNumberGenerator) -> RefCounted   # has generate() -> Dictionary
-func _operator_text() -> String                      # the sign, such as "-"
+		rng: RandomNumberGenerator) -> QuestionGenerator
+func _operator_text() -> String                        # the sign, such as "-"
+func _group_b_sprite(question: Dictionary) -> Texture2D  # optional; default: the question's object
 ```
 
-`generate()` must return `{a, b, answer, choices, object_id, ...}`. Hard levels of
-up to 12 and 12 objects (three rows each) fit at 16:9, 4:3 and 16:10.
+`setup()` keeps the generator in a `QuestionGenerator`-typed var, and
+`next_question()` calls its `generate()`, which must return
+`{a, b, answer, choices, object_id, ...}`. `_choices.chosen` is connected to
+`choice_made.emit` once, in `_ready()`, so a second `setup()` doesn't connect it
+again. Hard levels of up to 12 and 12 objects (three rows each) fit at 16:9, 4:3 and
+16:10.
+
+### `MathPairGenerator` (`games/math_common/math_pair_generator.gd`)
+
+The shared generator base of the `a <op> b = ?` games
+(`class_name MathPairGenerator extends QuestionGenerator`). It holds:
+
+- `_pairs`, every valid `(a, b)` pair of the level as `Vector2i`, which the
+  subclass fills in its `_init()`
+- the uniform pick of a pair that is never the previous one (`_pick_pair_index()`)
+- the object pick from the catalog's object ids
+- `generate()`, which returns `{a, b, answer, choices, object_id, key}`.
+  `choices` holds `CHOICE_COUNT` (4) unique ints from the subclass's smallest
+  choice up, from `QuestionUtils.number_choices()`, and `key` is `"a<sign>b"`.
+
+Per question the RNG is drawn in this order: the pair, the object, the choices.
+Keep that order, so a seed replays the same round.
+
+A subclass calls `super(name, sign, min_choice, object_ids, rng)` first in its
+`_init()`, appends its pairs to `_pairs`, and overrides `_answer(pair) -> int`.
 
 ## Step by step: the subtraction game
 
@@ -130,25 +172,19 @@ layout. Its files are `games/math_subtraction/subtraction_generator.gd`,
 `math_subtraction.gd` and `math_subtraction.tscn`.
 
 1. **Write the generator**, `subtraction_generator.gd`: a pure class with an
-   injected RNG. It builds every valid `(a, b)` pair for the level once, then picks
-   one uniformly per question, skipping the previous pair. Shortened:
+   injected RNG that extends `MathPairGenerator`. It builds every valid `(a, b)`
+   pair for the level once; the base picks one uniformly per question, skipping the
+   previous pair, and builds the question. Shortened:
 
    ```gdscript
    class_name SubtractionGenerator
-   extends RefCounted
+   extends MathPairGenerator
 
-   const CHOICE_COUNT := 4
    const MIN_CHOICE := 0   # 0 is a valid answer (a - a)
-
-   var _rng: RandomNumberGenerator
-   var _object_ids: PackedStringArray
-   var _pairs: Array[Vector2i] = []
-   var _last_pair_index: int = -1
 
 
    func _init(params: Dictionary, object_ids: PackedStringArray, rng: RandomNumberGenerator) -> void:
-   	_rng = rng
-   	_object_ids = object_ids
+   	super("SubtractionGenerator", "-", MIN_CHOICE, object_ids, rng)
    	var max_minuend := int(params["max_minuend"])   # JSON numbers may be floats
    	var min_minuend := maxi(int(params.get("min_minuend", 1)), 1)
    	for a in range(min_minuend, max_minuend + 1):
@@ -156,39 +192,41 @@ layout. Its files are `games/math_subtraction/subtraction_generator.gd`,
    			_pairs.append(Vector2i(a, b))
 
 
-   func generate() -> Dictionary:
-   	var index := _pick_pair_index()   # uniform, never the previous pair
-   	_last_pair_index = index
-   	var pair := _pairs[index]
-   	var answer := pair.x - pair.y
-   	return {
-   		"a": pair.x, "b": pair.y, "answer": answer,
-   		"choices": QuestionUtils.number_choices(answer, CHOICE_COUNT, MIN_CHOICE,
-   				QuestionUtils.NO_MAX, _rng),
-   		"object_id": _object_ids[_rng.randi_range(0, _object_ids.size() - 1)],
-   		"key": "%d-%d" % [pair.x, pair.y],
-   	}
+   func _answer(pair: Vector2i) -> int:
+   	return pair.x - pair.y
    ```
 
-   The real file also pushes an error for missing params or object ids, and
-   documents the params. `AdditionGenerator` has the same shape, with `max_sum`,
-   `max_addend` and `min_sum`.
+   The real file also pushes an error for a missing `max_minuend` or an empty pair
+   list, and documents the params. `AdditionGenerator` has the same shape, with
+   `max_sum`, `max_addend` and `min_sum`, and `MIN_CHOICE` 1.
 
-2. **Write the view script**, `math_subtraction.gd`. The base does everything else:
+2. **Write the view script**, `math_subtraction.gd`. The base does everything else.
+   Subtraction also overrides `_group_b_sprite()`, so the b taken away show as red
+   ✕ marks (the `mark_x` sprite) instead of objects:
 
    ```gdscript
    extends MathEquationGame
    ## Math, subtraction: `a - b = ?` on the shared equation layout.
 
+   const MARK_SPRITE := "mark_x"
+
 
    func _make_generator(params: Dictionary, object_ids: PackedStringArray,
-   		rng: RandomNumberGenerator) -> RefCounted:
+   		rng: RandomNumberGenerator) -> QuestionGenerator:
    	return SubtractionGenerator.new(params, object_ids, rng)
 
 
    func _operator_text() -> String:
    	return "-"
+
+
+   func _group_b_sprite(_question: Dictionary) -> Texture2D:
+   	return Art.sprite(MARK_SPRITE)
    ```
+
+   `math_addition.gd` is the same without `_group_b_sprite()`. A sprite the code
+   draws by id, like `mark_x`, goes in `Content.REQUIRED_SPRITES`, and not in
+   `content/objects.json`, so it's never picked as a counting object.
 
 3. **Make the scene**, `math_subtraction.tscn`: an inherited scene of the shared
    one, with the root script swapped (in the editor: Scene → New Inherited Scene):
@@ -203,8 +241,8 @@ layout. Its files are `games/math_subtraction/subtraction_generator.gd`,
    script = ExtResource("2_script")
    ```
 
-   The shell's top bar (back button and star bar) takes the top 30 px, so the game
-   gets the area below it, inset 4 px: 312×146 at 16:9.
+   The shell's top bar (the back button, and the star bar to its right) takes the
+   top 30 px, so the game gets the area below it, inset 4 px: 312×146 at 16:9.
 
 4. **Add the catalog entry** to the mode's `games` in `content/catalog.json`. The
    order in the file is the menu order; subtraction comes after addition.
@@ -216,9 +254,9 @@ layout. Its files are `games/math_subtraction/subtraction_generator.gd`,
      "round_length": 10,
      "params": {},
      "levels": [
-       {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "params": {"max_minuend": 5}},
-       {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "params": {"max_minuend": 10}},
-       {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "params": {"min_minuend": 8, "max_minuend": 12}}
+       {"id": "easy",   "title_key": "LEVEL_EASY",   "stars": 1, "color": "green",  "params": {"max_minuend": 5}},
+       {"id": "medium", "title_key": "LEVEL_MEDIUM", "stars": 2, "color": "orange", "params": {"max_minuend": 10}},
+       {"id": "hard",   "title_key": "LEVEL_HARD",   "stars": 3, "color": "red",    "params": {"min_minuend": 8, "max_minuend": 12}}
      ]
    }
    ```
@@ -276,14 +314,18 @@ extends MiniGame
 
 const CHOICE_SIZE := Vector2(40, 40)
 
-var _generator: CountingGenerator   # your pure generator class
+var _generator: CountingGenerator   # your pure generator, extends QuestionGenerator
 var _question: Dictionary = {}
 
 @onready var _choices: ChoiceRow = %Choices
 
 
-func setup(params: Dictionary, rng: RandomNumberGenerator) -> void:
+func _ready() -> void:
+	# Once, here: the shell adds the game to the tree before it calls setup().
 	_choices.chosen.connect(choice_made.emit)
+
+
+func setup(params: Dictionary, rng: RandomNumberGenerator) -> void:
 	_generator = CountingGenerator.new(params, rng)
 
 
@@ -308,7 +350,10 @@ func show_correct() -> void:
 	feedback_done.emit()
 ```
 
-The catalog entry, label, icon, glyph and check steps are the same as above.
+The word game also passes the merged level `params` to its generator, which uses
+them to choose the words and the blank (`max_length`, `blank`); see
+[content-and-localization.md](content-and-localization.md#word-levels). The
+catalog entry, label, icon, glyph and check steps are the same as above.
 
 ## Adding levels
 
@@ -317,14 +362,20 @@ screen, and `--open=<game>` without a level opens the first one.
 
 ```json
 "levels": [
-  {"id": "easy", "title_key": "LEVEL_EASY", "stars": 1, "params": {"max_count": 5}},
-  {"id": "hard", "title_key": "LEVEL_HARD", "stars": 3, "params": {"max_count": 10}}
+  {"id": "easy", "title_key": "LEVEL_EASY", "stars": 1, "color": "green", "params": {"max_count": 5}},
+  {"id": "hard", "title_key": "LEVEL_HARD", "stars": 3, "color": "red",   "params": {"max_count": 10}}
 ]
 ```
 
 - `id` is unique within the game. `stars` (1–3) is how many stars the level tile
   shows. `title_key` must be in `ui.csv`; `LEVEL_EASY`, `LEVEL_MEDIUM` and
   `LEVEL_HARD` already are.
+- `color` (optional) is the level tile's palette color name
+  (`content/palette.json`). Every level today uses easy `green`, medium `orange`
+  and hard `red`. Orange, not yellow, for medium, because the gold level stars
+  vanish on yellow and the white label reads poorly on it. Without `color`, the tile
+  takes the mode's color. Validation reports a color that isn't a non-empty string
+  or a known palette name.
 - A level's `params` are merged over the game's `params`, and the level wins.
 - Level tiles are 88×90, so three fit in a row at 320 px.
 
@@ -343,11 +394,14 @@ at least one game:
 - `color` is a palette color name (`content/palette.json`), used for the mode's
   tiles. `icon` is a 16×16 sprite id, and `title_key` goes in `ui.csv`.
 - The main menu fits any number of modes. Its tiles are 120×110 while the modes fit
-  in one row at that size (two do). With more, `MenuTiles.fit_grid()` picks the
-  column count that gives the biggest tiles in the space under the title, and the
-  tiles shrink and wrap into rows. When a tile's content wouldn't fit, every tile
-  switches to 1× icons or the 9 px label, so they all match. The layout is redone
-  when the window is resized.
-- The mode menu shows a mode's games as 96×96 tiles in a flow container. Three fit
-  in one row at 320 px. A fourth wraps into a second row, which doesn't fit the
-  16:9 view.
+  in one row at that size (two do). With more, `MenuTiles.fit_tiles()` sizes them:
+  `MenuTiles.fit_grid()` picks the column count that gives the biggest tiles in the
+  space under the title, and the tiles shrink and wrap into rows. When a tile's
+  content wouldn't fit, every tile switches to 1× icons or the 9 px label, so they
+  all match. The layout is redone when the window is resized.
+- The mode menu fits any number of games the same way, with
+  `MenuTiles.fit_tiles()`. Its tiles are 96×96 while the games fit in one row at
+  that size (three do at 320 px); with more they shrink, wrap into rows and may be
+  non-square (for example four games are 72×96 in one row at 16:9). The tiles
+  always start below the back button (`BackButton.CLEAR_BOTTOM`) and end 4 px
+  above the bottom edge.

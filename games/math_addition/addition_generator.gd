@@ -1,6 +1,7 @@
 class_name AdditionGenerator
-extends RefCounted
-## Generates `a + b = ?` questions for the math addition game.
+extends MathPairGenerator
+## Generates `a + b = ?` questions for the math addition game. The pair pick, the
+## object pick and the question shape come from `MathPairGenerator`.
 ##
 ## Pure logic: it takes the level params, the object ids and an injected
 ## `RandomNumberGenerator`, never the global RNG or an autoload, so the same seed
@@ -13,22 +14,12 @@ extends RefCounted
 ## At least one of `max_sum` and `max_addend` is required; every given bound applies.
 ## Addends are always >= 1.
 
-const CHOICE_COUNT := 4
 ## The smallest choice offered (addends are >= 1, so every sum is >= 2).
 const MIN_CHOICE := 1
 
-var _rng: RandomNumberGenerator
-var _object_ids: PackedStringArray
-## Every valid [a, b] pair for the level; questions pick uniformly from it.
-var _pairs: Array[Vector2i] = []
-var _last_pair_index: int = -1
-
 
 func _init(params: Dictionary, object_ids: PackedStringArray, rng: RandomNumberGenerator) -> void:
-	_rng = rng
-	_object_ids = object_ids
-	if _object_ids.is_empty():
-		push_error("AdditionGenerator: no object ids")
+	super("AdditionGenerator", "+", MIN_CHOICE, object_ids, rng)
 	var has_sum := params.has("max_sum")
 	var has_addend := params.has("max_addend")
 	if not has_sum and not has_addend:
@@ -47,37 +38,5 @@ func _init(params: Dictionary, object_ids: PackedStringArray, rng: RandomNumberG
 		push_error("AdditionGenerator: no valid addends for params %s" % [params])
 
 
-## Returns {a, b, answer, choices, object_id, key}. `choices` holds CHOICE_COUNT
-## unique ints >= 1, shuffled, one of them the answer. `key` ("a+b") never repeats
-## back to back unless the level has only one possible question.
-func generate() -> Dictionary:
-	if _pairs.is_empty():
-		push_error("AdditionGenerator: cannot generate, no valid addends")
-		return {}
-	var index := _pick_pair_index()
-	_last_pair_index = index
-	var pair := _pairs[index]
-	var answer := pair.x + pair.y
-	var object_id := ""
-	if not _object_ids.is_empty():
-		object_id = _object_ids[_rng.randi_range(0, _object_ids.size() - 1)]
-	return {
-		"a": pair.x,
-		"b": pair.y,
-		"answer": answer,
-		"choices": QuestionUtils.number_choices(answer, CHOICE_COUNT, MIN_CHOICE,
-				QuestionUtils.NO_MAX, _rng),
-		"object_id": object_id,
-		"key": "%d+%d" % [pair.x, pair.y],
-	}
-
-
-## Uniform over all pairs except the previous one.
-func _pick_pair_index() -> int:
-	var count := _pairs.size()
-	if count == 1 or _last_pair_index < 0:
-		return _rng.randi_range(0, count - 1)
-	var index := _rng.randi_range(0, count - 2)
-	if index >= _last_pair_index:
-		index += 1
-	return index
+func _answer(pair: Vector2i) -> int:
+	return pair.x + pair.y

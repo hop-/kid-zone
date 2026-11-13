@@ -13,12 +13,6 @@ const MAX_TILE_SIZE := Vector2(120, 110)
 const TILE_GAP := Vector2(16, 8)
 ## The least space kept above the title, between it and the tiles, and below them.
 const MIN_SPACING := 4.0
-## Menu icons are 16x16 sprites.
-const ICON_SIZE := 16.0
-## A tile's room around its content: the bevel's content margins plus 1 px.
-const TILE_PADDING := Vector2(8, 6)
-## The gap between a tile's icons and its label (`tile_button.tscn`).
-const TILE_CONTENT_GAP := 4.0
 
 @onready var _layout: VBoxContainer = $Layout
 @onready var _title: Label = %Title
@@ -41,35 +35,11 @@ func tiles() -> Array[TileButton]:
 	return MenuTiles.tiles_in(_tiles)
 
 
-## Sizes the tiles to fit the space under the title, and narrows the flow container
-## so it wraps after the chosen number of columns. The labels are 18 px when every
-## one fits its tile, and the icons 2x when there's height for them.
+## Sizes the tiles to fit the space under the title (`MenuTiles.fit_tiles()`).
 func _layout_tiles() -> void:
-	var mode_tiles := tiles()
 	var area := Vector2(_layout.size.x,
 			_layout.size.y - _title.get_combined_minimum_size().y - 3.0 * MIN_SPACING)
-	if mode_tiles.is_empty() or area.x <= 0.0 or area.y <= 0.0:
-		return
-	var grid := MenuTiles.fit_grid(mode_tiles.size(), area, MAX_TILE_SIZE, TILE_GAP)
-	var columns: int = grid["columns"]
-	var tile_size: Vector2 = grid["size"]
-	_tiles.custom_minimum_size.x = columns * tile_size.x + (columns - 1) * TILE_GAP.x
-	# One label size and icon scale for every tile, so the tiles match.
-	var room := tile_size - TILE_PADDING
-	var label_size := Art.FONT_MEDIUM
-	for tile in mode_tiles:
-		if Art.font().get_string_size(tile.label_text(), HORIZONTAL_ALIGNMENT_LEFT, -1,
-				Art.FONT_MEDIUM).x > room.x:
-			label_size = Art.FONT_SMALL
-	var icon_scale := 2
-	if ICON_SIZE * icon_scale + TILE_CONTENT_GAP + label_size > room.y:
-		icon_scale = 1
-	if ICON_SIZE * icon_scale + TILE_CONTENT_GAP + label_size > room.y:
-		label_size = Art.FONT_SMALL
-	for tile in mode_tiles:
-		tile.custom_minimum_size = tile_size
-		tile.icon_scale = icon_scale
-		tile.label_variation = Art.LABEL_MEDIUM if label_size == Art.FONT_MEDIUM else &""
+	MenuTiles.fit_tiles(_tiles, area, MAX_TILE_SIZE, TILE_GAP)
 
 
 func _on_mode_pressed(mode_id: String) -> void:

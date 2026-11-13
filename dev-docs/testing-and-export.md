@@ -78,7 +78,9 @@ func test_sound_toggle_mutes_the_sfx_bus() -> void:
 - **Pure logic** (`RoundController`, `AdditionGenerator`, `SubtractionGenerator`,
   `MissingLetterGenerator`, `QuestionUtils`) takes a seeded
   `RandomNumberGenerator`, so tests can run 1000 questions and compare two runs
-  with the same seed.
+  with the same seed. Generators take the merged level params, which
+  `Content.merged_params(game_id, level_id)` gives; a word level is
+  `MissingLetterGenerator.new(pack, rng, 4, params)`.
 - **Fixtures:** `Content`, `Art` and `Audio` can be separate instances:
   `preload("res://autoload/content.gd").new()` then `load_content(<root>)` for a
   fixture content folder; `Art`'s `override_root` and `content`; `Audio`'s

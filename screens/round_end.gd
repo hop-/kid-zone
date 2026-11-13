@@ -16,6 +16,8 @@ var _stars: Array[int] = []
 
 @onready var _star_bar: StarBar = %Stars
 @onready var _buttons: HBoxContainer = %Buttons
+@onready var _layout: Control = $Layout
+@onready var _top_space: Control = $Layout/TopSpace
 
 
 func setup_screen(params: Dictionary) -> void:
@@ -30,6 +32,9 @@ func setup_screen(params: Dictionary) -> void:
 
 
 func _ready() -> void:
+	# On short screens (16:9, 16:10) the centered stars would reach the back button;
+	# the top space keeps them below it. Taller screens have room and don't change.
+	_top_space.custom_minimum_size.y = BackButton.CLEAR_BOTTOM - _layout.offset_top
 	_star_bar.slot_count = maxi(_stars.size(), Content.round_length(_game_id))
 	var again := MenuTiles.add_tile(_buttons, "again", ["icon_again"], "ROUND_AGAIN",
 			AGAIN_COLOR, TILE_SIZE)

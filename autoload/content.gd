@@ -40,11 +40,12 @@ const REQUIRED_SFX: PackedStringArray = ["tap", "back", "correct", "wrong", "fan
 ## UI keys the screens use directly. Catalog title keys are checked as well.
 const REQUIRED_UI_KEYS: PackedStringArray = ["APP_TITLE", "ROUND_AGAIN", "ROUND_HOME"]
 ## Sprites the UI draws directly. Catalog icons, object sprites and word pictures
-## are checked as well.
+## are checked as well. `mark_x` is subtraction's take-away mark, not a counting
+## object, so it isn't in objects.json.
 const REQUIRED_SPRITES: PackedStringArray = [
 	"icon_sound_on", "icon_sound_off", "icon_case_upper", "icon_case_lower", "icon_back",
 	"icon_star_empty", "icon_star_gold", "icon_star_silver", "icon_again", "icon_home",
-	"app_icon",
+	"app_icon", "mark_x",
 ]
 ## Characters the games draw besides words and UI strings: the math games' digits and
 ## signs.
@@ -59,6 +60,11 @@ const WAVES: PackedStringArray = ["square", "triangle", "noise"]
 const MIN_DISTRACTORS := 3
 const DEFAULT_ROUND_LENGTH := 10
 const MAX_LEVEL_STARS := 3
+## Games whose params filter the word pack (`MissingLetterGenerator`'s
+## `min_length`, `max_length` and `blank`). `validate()` checks each of their levels'
+## merged params, and that each level leaves at least
+## `MissingLetterGenerator.MIN_WORDS` words of the active pack.
+const WORD_FILTER_GAMES: PackedStringArray = ["word_missing_letter"]
 
 const _ID_FIRST_CHARS := "abcdefghijklmnopqrstuvwxyz"
 const _ID_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789_"
@@ -413,6 +419,7 @@ func validate() -> PackedStringArray:
 	problems.append_array(_validate_ui_keys())
 	problems.append_array(_validate_objects())
 	problems.append_array(_validate_words())
+	problems.append_array(_validate_word_levels())
 	problems.append_array(_validate_sfx())
 	problems.append_array(_sprite_problems)
 	problems.append_array(_validate_sprites())
@@ -490,12 +497,13 @@ func _validate_catalog() -> PackedStringArray:
 			problems.append("%s: %s: 'games' must be a non-empty array" % [f, label])
 			continue
 		for j in (games as Array).size():
-			problems.append_array(_validate_game(games[j], j, label, game_ids))
+			problems.append_array(_validate_game(games[j], j, label, game_ids, palette_names))
 	return problems
 
 
 func _validate_game(entry: Variant, index: int, mode_label: String,
-		game_ids: Dictionary[String, bool]) -> PackedStringArray:
+		game_ids: Dictionary[String, bool],
+		palette_names: Dictionary[String, bool]) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var f := CATALOG_FILE
 	if not entry is Dictionary:
@@ -529,6 +537,13 @@ func _validate_game(entry: Variant, index: int, mode_label: String,
 		if not (_is_int_like(stars) and int(stars) >= 1 and int(stars) <= MAX_LEVEL_STARS):
 			problems.append("%s: %s: 'stars' must be an integer 1-%d"
 					% [f, level_label, MAX_LEVEL_STARS])
+		# Optional: the tile color; level select falls back to the mode's color.
+		if level_entry.has("color"):
+			var color_name: Variant = level_entry["color"]
+			if not (color_name is String and not String(color_name).is_empty()):
+				problems.append("%s: %s: 'color' must be a palette color name" % [f, level_label])
+			elif not _palette.is_empty() and not palette_names.has(color_name):
+				problems.append("%s: %s: unknown palette color '%s'" % [f, level_label, color_name])
 		if level_entry.has("params") and not level_entry["params"] is Dictionary:
 			problems.append("%s: %s: 'params' must be an object" % [f, level_label])
 	return problems
@@ -682,6 +697,42 @@ func _validate_words() -> PackedStringArray:
 			if count < MIN_DISTRACTORS:
 				problems.append("%s: word '%s': blank %d has only %d valid distractors, needs %d"
 						% [f, entry.get("id", text), blank_index, count, MIN_DISTRACTORS])
+	return problems
+
+
+## The word games' level params (`WORD_FILTER_GAMES`): valid filter params
+## (`MissingLetterGenerator.param_problems()`), and at least
+## `MissingLetterGenerator.MIN_WORDS` words of the active pack left by each level's
+## filter. A game without levels is checked with its own params.
+func _validate_word_levels() -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var f := CATALOG_FILE
+	var pack_words: Array[Dictionary] = []
+	for entry in _dicts(_words.get("words")):
+		if entry.get("text") is String and not String(entry["text"]).is_empty():
+			pack_words.append(entry)
+	for game_id in WORD_FILTER_GAMES:
+		if game(game_id).is_empty():
+			continue
+		var level_ids: PackedStringArray = []
+		for level_entry in levels_for(game_id):
+			level_ids.append(str(level_entry.get("id", "")))
+		if level_ids.is_empty():
+			level_ids.append("")
+		for level_id in level_ids:
+			var label := "game '%s'" % game_id
+			if not level_id.is_empty():
+				label += " level '%s'" % level_id
+			var params := merged_params(game_id, level_id)
+			var param_problems := MissingLetterGenerator.param_problems(params)
+			for problem in param_problems:
+				problems.append("%s: %s: %s" % [f, label, problem])
+			if not param_problems.is_empty() or pack_words.is_empty():
+				continue
+			var count := MissingLetterGenerator.filter_words(pack_words, params).size()
+			if count < MissingLetterGenerator.MIN_WORDS:
+				problems.append("%s: %s: its params leave %d words of %s, need %d"
+						% [f, label, count, _words_file, MissingLetterGenerator.MIN_WORDS])
 	return problems
 
 
